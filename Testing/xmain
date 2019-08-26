@@ -4,8 +4,6 @@ exec racket -tm "$0" ${1+"$@"}
 |#
 #lang racket
 
-;; See Matthew's note at end for the next revsison. 
-
 ;; Use as:
 ;;    $ xtest PathToTests PathToExecutable 
 ;; 
@@ -21,55 +19,88 @@ exec racket -tm "$0" ${1+"$@"}
 (define (matching-output-file-name prefix numberstr)
   (format "~a~a-out.json" (or prefix "") numberstr))
 
-;; A concrete instance must supply a function that checks the well-formedness
-;; of the json format and possibly the validity.
-
-;; Use _server_ for testing TCP clients and STD I/O executables. 
-;; Use _client_ for testing TCP servers. 
-
-
-;; TODO: 
-;; We should also figure out whether we can _trust_ students' prorgams in terms
-;; of file acces. At the moment, it uses plain 'process' to run the executable.
-
-;; NOTE: this is where shill could be really useful I think. 
+;; TODO:
+;; -- security for student file acces (shill?) 
 
 (provide
- ;; type FileName = String 
- ;; type JSONcheck =
- #;
- (-> [List FileName [Listof JSexpr] FileName [Listof JSexpr]] Boolean)
- 
- ;;  [#:check JSONcheck]
- ;;  [#:tcp (U False PortNumber)]
- ;;  [-> (TestPath:String ExecPath:String -> Void)]
- ;; the #:check parameter filters the json tests
- ;; the optional #:tcp parameter chooses between tcp and stdin/stdout input
- client server
- 
- client/no-tests ;; like client but not TestPath argument
-
- #;
- [(main #:check values) "Some/Path/" "Some/Different/Path/To/Executable"]
- ;; effect: run "Some/Different/Path/To/Executable" on all tests of the shape
- ;; (*-in.json vs *-out.json) in "Some/Path/"
 
  ;; [Parameter Boolean]
- test-plain-and-pretty-json?
- test-fast-and-slow-delivery? 
+ test-plain-and-pretty-json?              ;; preset by default 
+ test-fast-and-slow-delivery?             ;; the remaining are unset 
  test-with-and-without-trailing-newline? 
  test-with-and-without-escaped-unicode?
- test-with-batch-mode?)
+ test-with-batch-mode?
+ 
+ (contract-out
+  [client
+   ;; run _to-be-tested_ on tests in _test-directory_
+   ;; the directory contains pairs of files:
+   ;; -- recognize-input-file-name ( <n>-in.json for a natural <n> )
+   ;; -- matching-output-file-name ( <n>-out.json for <n>-in.json )
+   ;; see above for the two functions
+   ;; #:tcp   determines the TCP port for LOCALHOST testing, if any
+   ;; #:check can be used to determine the validity of the JSON input
+   ;;         there is also a well-formedness check (but it is diabled)
+   #; (-> [List FileName [Listof JSexpr] FileName [Listof JSexpr]] Boolean)
+   (->i ([tests-directory path-string?] [to-be-tested path-string?])
+        (#:check [valid-json (-> any/c any)]
+         #:tcp   (tcp-on (or/c #false (and/c (>/c 1024) (</c 65000)))))
+        [r any/c])]
+  
+  [server
+   ;; like client, but plays role of TCP server if tcp is #t
+   (->i ([tests-directory path-string?] [to-be-tested path-string?])
+        (#:check [valid-json (-> any/c any)] #:tcp (tcp-on boolean?))
+        [r any/c])]
 
-;; -----------------------------------------------------------------------------
-(require "common.rkt")
+  [client/no-tests
+   ;; run _to-be-tested_ on test inputs from STDIN 
+   ;; #:tcp determines whether the communication uses TCP; STDIN/STDOUT is default 
+   ;; #:check can be used to determine the validity of the JSON input
+   ;;         there is also a well-formedness check (but it is diabled)
+   #; (-> [List FileName [Listof JSexpr] FileName [Listof JSexpr]] Boolean)
+   (->i ([to-be-tested path-string?])
+        (#:check [valid-json (-> any/c any)] #:tcp (tcp-on boolean?))
+        [r any/c])]))
+
+;                                                                                      
+;       ;                                  ;                                           
+;       ;                                  ;                          ;                
+;       ;                                  ;                                           
+;    ;;;;   ;;;   ;;;;    ;;;   ; ;;    ;;;;   ;;;   ; ;;    ;;;    ;;;    ;;;    ;;;  
+;   ;; ;;  ;;  ;  ;; ;;  ;;  ;  ;;  ;  ;; ;;  ;;  ;  ;;  ;  ;;  ;     ;   ;;  ;  ;   ; 
+;   ;   ;  ;   ;; ;   ;  ;   ;; ;   ;  ;   ;  ;   ;; ;   ;  ;         ;   ;   ;; ;     
+;   ;   ;  ;;;;;; ;   ;  ;;;;;; ;   ;  ;   ;  ;;;;;; ;   ;  ;         ;   ;;;;;;  ;;;  
+;   ;   ;  ;      ;   ;  ;      ;   ;  ;   ;  ;      ;   ;  ;         ;   ;          ; 
+;   ;; ;;  ;      ;; ;;  ;      ;   ;  ;; ;;  ;      ;   ;  ;;        ;   ;      ;   ; 
+;    ;;;;   ;;;;  ;;;;    ;;;;  ;   ;   ;;;;   ;;;;  ;   ;   ;;;;   ;;;;;  ;;;;   ;;;  
+;                 ;                                                                    
+;                 ;                                                                    
+;                 ;                                                                    
+
+(require SwDev/Testing/communication)
+(require SwDev/Testing/tcp)
 (require json)
 (require (for-syntax racket/syntax))
 
 (module+ test
   (require rackunit))
 
-;; -----------------------------------------------------------------------------
+;                                                                        
+;                                                                        
+;                                               ;                        
+;                                               ;                        
+;   ;;;;   ;;;;    ;;;;  ;;;;  ;;;;;;   ;;;   ;;;;;   ;;;    ;;;;   ;;;  
+;   ;; ;;      ;   ;;  ;     ; ;  ;  ; ;;  ;    ;    ;;  ;   ;;  ; ;   ; 
+;   ;   ;      ;   ;         ; ;  ;  ; ;   ;;   ;    ;   ;;  ;     ;     
+;   ;   ;   ;;;;   ;      ;;;; ;  ;  ; ;;;;;;   ;    ;;;;;;  ;      ;;;  
+;   ;   ;  ;   ;   ;     ;   ; ;  ;  ; ;        ;    ;       ;         ; 
+;   ;; ;;  ;   ;   ;     ;   ; ;  ;  ; ;        ;    ;       ;     ;   ; 
+;   ;;;;    ;;;;   ;      ;;;; ;  ;  ;  ;;;;    ;;;   ;;;;   ;      ;;;  
+;   ;                                                                    
+;   ;                                                                    
+;   ;                                                                    
+
 #; {type Setup = [->* InputPort OutputPort [-> Void]]}
 
 (define test-plain-and-pretty-json?             (make-parameter #t))
@@ -78,6 +109,7 @@ exec racket -tm "$0" ${1+"$@"}
 (define test-with-and-without-escaped-unicode?  (make-parameter #f))
 (define test-with-batch-mode?                   (make-parameter #f))
 
+;; This is to make the external parameter names consistent with Tony's implementation 
 (define-syntax (def/setting stx)
   (syntax-case stx ()
     [(_ para pos neg)
@@ -89,7 +121,22 @@ exec racket -tm "$0" ${1+"$@"}
 (def/setting with-and-without-trailing-newline? '(#t #f) '(#t))
 (def/setting with-and-without-escaped-unicode?  '(#f #t) '(#f))
 
-(define ((server #:check check #:tcp (tcp #false)) tests-directory-name program-to-be-tested)
+;                                                                                                    
+;                                                                                                    
+;                                                                  ;;;       ;                   ;   
+;                                                                    ;                           ;   
+;    ;;;    ;;;    ;;;;  ;   ;   ;;;    ;;;;                 ;;;     ;     ;;;    ;;;   ; ;;   ;;;;; 
+;   ;   ;  ;;  ;   ;;  ; ;   ;  ;;  ;   ;;  ;               ;;  ;    ;       ;   ;;  ;  ;;  ;    ;   
+;   ;      ;   ;;  ;      ; ;   ;   ;;  ;                   ;        ;       ;   ;   ;; ;   ;    ;   
+;    ;;;   ;;;;;;  ;      ; ;   ;;;;;;  ;                   ;        ;       ;   ;;;;;; ;   ;    ;   
+;       ;  ;       ;      ; ;   ;       ;                   ;        ;       ;   ;      ;   ;    ;   
+;   ;   ;  ;       ;       ;    ;       ;       ;;          ;;       ;       ;   ;      ;   ;    ;   
+;    ;;;    ;;;;   ;       ;     ;;;;   ;       ;;           ;;;;     ;;   ;;;;;  ;;;;  ;   ;    ;;; 
+;                                               ;                                                    
+;                                              ;;                                                    
+;                                                                                                    
+
+(define ((server #:check valid-json #:tcp (tcp #false)) tests-directory-name program-to-be-tested)
   (define setup
     (make-setup
      program-to-be-tested
@@ -100,21 +147,20 @@ exec racket -tm "$0" ${1+"$@"}
          [(sync/timeout ACCEPT-TIMEOUT listener) => tcp-accept]
          [else (displayln `(failed to accept a connection within ,ACCEPT-TIMEOUT seconds))
                (values #f #f)]))))
-  (work-horse setup program-to-be-tested tests-directory-name check))
+  (work-horse setup program-to-be-tested tests-directory-name valid-json))
 
-(define ((client #:check check #:tcp (tcp #false)) tests-directory-name program-to-be-tested)
+(define ((client #:check valid-json #:tcp (tcp #false)) tests-directory-name program-to-be-tested)
   (define setup
     (make-setup
      program-to-be-tested
      (lambda (stdout stdin)
        (if tcp (try-to-connect-to-times 10 tcp) (values stdout stdin)))))
-  (work-horse setup program-to-be-tested tests-directory-name check))
+  (work-horse setup program-to-be-tested tests-directory-name valid-json))
 
-(define ((client/no-tests #:check check #:tcp (tcp #f) #:stdin (stdin #f))
-         program-to-be-tested)
+(define ((client/no-tests #:check valid-json #:tcp (tcp #f) #:stdin (stdin #f)) program-to-be-tested)
   (define (connect stdout stdin) (if tcp (try-to-connect-to-times 10 tcp) (values stdout stdin)))
   (define setup (make-setup program-to-be-tested connect #:stdin stdin))
-  (work-horse/no-tests setup program-to-be-tested check))
+  (work-horse/no-tests setup program-to-be-tested valid-json))
 
 #; ([InputPort OutputPort -> (values InputPort OutputPort)] -> Setup)
 (define (make-setup program-to-be-tested f #:stdin (config #f))
@@ -164,14 +210,28 @@ exec racket -tm "$0" ${1+"$@"}
 (define (kill-process query)
   (query 'kill))
 
-;; ---------------------------------------------------------------------------------------------------
+;                                                                 
+;                        ;      ;                                 
+;                        ;      ;                                 
+;                        ;      ;                                 
+;  ;     ;  ;;;    ;;;;  ;  ;   ; ;;    ;;;    ;;;;   ;;;    ;;;  
+;  ;     ; ;; ;;   ;;  ; ;  ;   ;;  ;  ;; ;;   ;;  ; ;   ;  ;;  ; 
+;   ; ; ;  ;   ;   ;     ; ;    ;   ;  ;   ;   ;     ;      ;   ;;
+;   ; ; ;  ;   ;   ;     ;;;    ;   ;  ;   ;   ;      ;;;   ;;;;;;
+;   ;; ;;  ;   ;   ;     ; ;    ;   ;  ;   ;   ;         ;  ;     
+;   ;; ;;  ;; ;;   ;     ;  ;   ;   ;  ;; ;;   ;     ;   ;  ;     
+;    ; ;    ;;;    ;     ;   ;  ;   ;   ;;;    ;      ;;;    ;;;; 
+;                                                                 
+;                                                                 
+;                                                                 
+
 #; (Setup String JSONCheck -> Void)
 (define (work-horse/no-tests setup program-to-be-tested valid-json?)
   (displayln `(running ,program-to-be-tested))
   (for* ([pretty     ([plain-and-pretty-json?])]
-              [trickle    ((fast-and-slow-delivery?))]
-              [terminated ([with-and-without-trailing-newline?])]
-              [escaped    ((with-and-without-escaped-unicode?))])
+         [trickle    ((fast-and-slow-delivery?))]
+         [terminated ([with-and-without-trailing-newline?])]
+         [escaped    ((with-and-without-escaped-unicode?))])
     (match-define `(,n ,config) (test-one/no-tests pretty trickle terminated escaped setup))
     (displayln `(ran ,program-to-be-tested successfully (,config) and received ,n JSON values))))
 
@@ -358,9 +418,20 @@ exec racket -tm "$0" ${1+"$@"}
 (define (file->json f)
   (with-input-from-file f (all-json-expressions f)))
 
-;; String -> [Maybe [Listof JSexpr]]
-;; is the content of the current input port a JSON file?
-;; effect: display its name if it is not
+;                                     
+;                                     
+;     ;                    ;          
+;     ;                    ;          
+;   ;;;;;   ;;;    ;;;   ;;;;;   ;;;  
+;     ;    ;;  ;  ;   ;    ;    ;   ; 
+;     ;    ;   ;; ;        ;    ;     
+;     ;    ;;;;;;  ;;;     ;     ;;;  
+;     ;    ;          ;    ;        ; 
+;     ;    ;      ;   ;    ;    ;   ; 
+;     ;;;   ;;;;   ;;;     ;;;   ;;;  
+;                                     
+;                                     
+;                                     
 
 (module+ test
   (check-equal? (with-input-from-string "1" (all-json-expressions "nonsense"))
@@ -489,33 +560,3 @@ instead replace itself with the other program"
  (process "exec racket sleeper.rkt")
 
 |#
-
-
-#;
-(define ((client #:check check #:tcp (tcp #false)) tests-directory-name program-to-be-tested)
-  (define (setup)
-    (define custodian (make-custodian))
-    (parameterize ((current-custodian custodian)
-                   (current-subprocess-custodian-mode 'kill))
-      (define-values (stdout stdin pid in-p-s-stderr query) (spawn-process program-to-be-tested))
-      (define (tear-down)
-        (custodian-shutdown-all custodian)
-        (kill-process query))
-
-      (define-values (in out)
-        (cond
-          [(not tcp) (values stdout stdin)]
-          [else 
-           ;; give process some time to set up TCP receivers
-           (define retry-limit 10)
-           (define-values (in out)
-             (let retry ((count 1))
-               (cond
-                 [(> count retry-limit) (die `(no connection after ,retry-limit tries))]
-                 [else 
-                  (sleep 0.5)
-                  (with-handlers ((exn:fail:network? (lambda (x) (retry (+ 1 count)))))
-                    (tcp-connect LOCALHOST tcp))])))
-           (values in out)]))
-      (values in out tear-down)))
-  (work-horse setup program-to-be-tested tests-directory-name check))
