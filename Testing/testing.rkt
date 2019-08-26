@@ -19,11 +19,11 @@
  ;; IF recording is set, also record the specified test cases as pairs of files
  r-check-exn)
 
-(require "common.rkt")
+(require SwDev/Testing/communication)
 (require rackunit)
 (require json)
 
-(require SwDev/spy)
+(require SwDev/Debugging/spy)
 
 ;; ---------------------------------------------------------------------------------------------------
 (define recording (make-parameter #false))
