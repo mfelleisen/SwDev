@@ -109,9 +109,9 @@
 
 ;; Detects values that mean the end of the session with the remote party.
 (define (terminal-value? blob)
-  (or (and (cons? blob) (eq? (first blob) 'ERROR))
-      (eq? blob  NO-REACTION)
-      (eq? blob  RESPONSE-INCOMPLETE)))
+  (or (eq? blob  NO-REACTION)
+      (eq? blob  RESPONSE-INCOMPLETE)
+      (and (string? blob) (string<? "ERROR" blob))))
 
 ;; Read a blob of JSON with a timeout for the first byte of input to appear
 ;; and a second timeout by which the entirety of the blob should have appeared.
@@ -136,6 +136,6 @@
      (match (sync/timeout response-duration-timeout-sec reply-ch)
        [(list 'ok blob)                   blob]
        [(list 'exn (? exn:fail:network?)) eof]
-       [(list 'exn e)                    `(ERROR ,(exn-message e))]
+       [(list 'exn e)                     (string-append "ERROR" " " (exn-message e))]
        [#f                                RESPONSE-INCOMPLETE])]))
 
