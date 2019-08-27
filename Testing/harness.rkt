@@ -42,16 +42,15 @@ exec racket -tm "$0" ${1+"$@"}
    ;; #:check can be used to determine the validity of the JSON input
    ;;         there is also a well-formedness check (but it is diabled)
    #; (-> [List FileName [Listof JSexpr] FileName [Listof JSexpr]] Boolean)
-   (->i ([tests-directory path-string?] [to-be-tested path-string?])
-        (#:check [valid-json (-> any/c any)]
-         #:tcp   (tcp-on (or/c #false (and/c (>/c 1024) (</c 65000)))))
-        [r any/c])]
+   (->i (#:check [valid-json (-> any/c any)])
+        (#:tcp   (tcp-on (or/c #false (and/c (>/c 1024) (</c 65000)))))
+        (r (->i ([tests-directory path-string?] [to-be-tested path-string?]) [r any/c])))]
   
   [server
    ;; like client, but plays role of TCP server if tcp is #t
-   (->i ([tests-directory path-string?] [to-be-tested path-string?])
-        (#:check [valid-json (-> any/c any)] #:tcp (tcp-on boolean?))
-        [r any/c])]
+   (->i (#:check [valid-json (-> any/c any)])
+        (#:tcp   (tcp-on (or/c #false (and/c (>/c 1024) (</c 65000)))))
+        (r (->i ([tests-directory path-string?] [to-be-tested path-string?]) [r any/c])))]
 
   [client/no-tests
    ;; run _to-be-tested_ on test inputs from STDIN 
@@ -59,9 +58,9 @@ exec racket -tm "$0" ${1+"$@"}
    ;; #:check can be used to determine the validity of the JSON input
    ;;         there is also a well-formedness check (but it is diabled)
    #; (-> [List FileName [Listof JSexpr] FileName [Listof JSexpr]] Boolean)
-   (->i ([to-be-tested path-string?])
-        (#:check [valid-json (-> any/c any)] #:tcp (tcp-on boolean?))
-        [r any/c])]))
+   (->i (#:check [valid-json (-> any/c any)])
+        (#:tcp   (tcp-on (or/c #false (and/c (>/c 1024) (</c 65000)))))
+        (r (->i ([to-be-tested path-string?]) [r any/c])))]))
 
 ;                                                                                      
 ;       ;                                  ;                                           
@@ -459,14 +458,15 @@ exec racket -tm "$0" ${1+"$@"}
   (void
    (with-output-to-string
      (lambda ()
-       (check-false (with-input-from-string "()" (all-json-expressions "nonsense"))
+       (check-equal? (with-input-from-string "()" (all-json-expressions "nonsense"))
+                     '()
                     "false for bad file")))))
 
 (define ((all-json-expressions f))
   (with-handlers ((exn:fail:read?
                    (lambda (xn)
                      (displayln `(,f is not a JSON file))
-                     #false)))
+                     '())))
     (let all-json-lines ()
       (define next (read-json))
       (cond
@@ -504,8 +504,8 @@ exec racket -tm "$0" ${1+"$@"}
                       (build-path "/foo/bar/3-in.json")))
   (check-equal? (json-test-files path2)
                 (list (list "/foo/bar/1-in.json" "/foo/bar/1-out.json")
-                      (list "/foo/bar/zot-1-in.json" "/foo/bar/zot-1-out.json")
-                      (list "/foo/bar/foo-bar-1-in.json" "/foo/bar/foo-bar-1-out.json")))
+                      (list "/foo/bar/foo-bar-1-in.json" "/foo/bar/foo-bar-1-out.json")
+                      (list "/foo/bar/zot-1-in.json" "/foo/bar/zot-1-out.json")))
   
   (check-equal? (json-test-files (append path0 path1)) strg0))
 
