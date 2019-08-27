@@ -385,9 +385,8 @@ exec racket -tm "$0" ${1+"$@"}
     [(list _in-fname (? list?) _out-fname (? list?)) #t]
     [_ #f]))
 
-;; [Listof JSexpr] [Listof JSexpr] [Listof (List Symbol Symbol (Listof JSexpr))] -> Symbol
-;; compare: 'ok for the expected equals actual, 'partial for some passes and some fails, 'fail
-;; otherwise
+;; [Listof JSexpr] [Listof JSexpr] [Listof (List Symbol (Listof JSexpr))] -> Symbol
+;; compare: 'ok for the expected equals actual; 'partial for some passes; 'fail otherwise
 ;; effect: write out diff for failed test
 (define (compare input* expected-out actual-outputs)
   (define number-outputs (length actual-outputs))
@@ -396,8 +395,7 @@ exec racket -tm "$0" ${1+"$@"}
                   (match-define (list _classification actual-out) entry)
                   (if (equal? expected-out actual-out) partial-score 0)))
   (cond
-    [(equal? score 1)
-     'ok]
+    [(= score 1) 'ok]
     [else
      (displayln '---------------------------------)
      (displayln `(*** score ,score))
@@ -410,6 +408,14 @@ exec racket -tm "$0" ${1+"$@"}
      (if (zero? score)
          'fail
          'partial)]))
+
+#; {[Listof JSExpr] [Listof JSExpr] -> Booleaan}
+(define (compre-expected-actual expected-out actual-out)
+  (or (equal? expected-out actual-out)
+      (match* (expected-out actual-out)
+        [((list(? string? expected-single)) (list (? string? actual-single)))
+         (regexp-match expected-out actual-out)]
+        [(_ _) #false])))
 
 ;; -----------------------------------------------------------------------------
 ;; String -> [Maybe [Listof JSexpr]]
