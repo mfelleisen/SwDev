@@ -384,15 +384,30 @@ exec racket -tm "$0" ${1+"$@"}
     [(list _in-fname (? list?) _out-fname (? list?)) #t]
     [_ #f]))
 
+;                                                   
+;                                                   
+;                                                   
+;                                                   
+;    ;;;    ;;;  ;;;;;;  ;;;;   ;;;;    ;;;;   ;;;  
+;   ;;  ;  ;; ;; ;  ;  ; ;; ;;      ;   ;;  ; ;;  ; 
+;   ;      ;   ; ;  ;  ; ;   ;      ;   ;     ;   ;;
+;   ;      ;   ; ;  ;  ; ;   ;   ;;;;   ;     ;;;;;;
+;   ;      ;   ; ;  ;  ; ;   ;  ;   ;   ;     ;     
+;   ;;     ;; ;; ;  ;  ; ;; ;;  ;   ;   ;     ;     
+;    ;;;;   ;;;  ;  ;  ; ;;;;    ;;;;   ;      ;;;; 
+;                        ;                          
+;                        ;                          
+;                        ;                          
+
 ;; [Listof JSexpr] [Listof JSexpr] [Listof (List Symbol (Listof JSexpr))] -> Symbol
 ;; compare: 'ok for the expected equals actual; 'partial for some passes; 'fail otherwise
 ;; effect: write out diff for failed test
 (define (compare input* expected-out actual-outputs)
   (define number-outputs (length actual-outputs))
-  (define partial-score (/ number-outputs))
+  (define partial-score  (/ number-outputs))
   (define score (for/sum [(entry actual-outputs)]
                   (match-define (list _classification actual-out) entry)
-                  (if (equal? expected-out actual-out) partial-score 0)))
+                  (if (compare-expected-actual expected-out actual-out) partial-score 0)))
   (cond
     [(= score 1) 'ok]
     [else
@@ -409,12 +424,14 @@ exec racket -tm "$0" ${1+"$@"}
          'partial)]))
 
 #; {[Listof JSExpr] [Listof JSExpr] -> Booleaan}
-(define (compre-expected-actual expected-out actual-out)
-  (or (equal? expected-out actual-out)
-      (match* (expected-out actual-out)
+(define (compare-expected-actual expected-out actual-out)
+  (or (equal? (spy expected-out) (spy actual-out))
+      (spy (match* (expected-out actual-out)
         [((list(? string? expected-single)) (list (? string? actual-single)))
-         (regexp-match expected-out actual-out)]
-        [(_ _) #false])))
+         (regexp-match expected-single actual-single)]
+        [(_ _) #false]))))
+
+(require SwDev/Debugging/spy)
 
 ;; -----------------------------------------------------------------------------
 ;; String -> [Maybe [Listof JSexpr]]
@@ -468,7 +485,7 @@ exec racket -tm "$0" ${1+"$@"}
                      (displayln `(,f is not a JSON file))
                      '())))
     (let all-json-lines ()
-      (define next (read-json))
+      (define next (read-message))
       (cond
         [(eof-object? next) '()]
         [else (cons next (all-json-lines))]))))
