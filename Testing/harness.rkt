@@ -82,6 +82,8 @@ exec racket -tm "$0" ${1+"$@"}
 (require json)
 (require (for-syntax racket/syntax))
 
+(require SwDev/Debugging/spy)
+
 (module+ test
   (require rackunit))
 
@@ -425,13 +427,11 @@ exec racket -tm "$0" ${1+"$@"}
 
 #; {[Listof JSExpr] [Listof JSExpr] -> Booleaan}
 (define (compare-expected-actual expected-out actual-out)
-  (or (equal? (spy expected-out) (spy actual-out))
-      (spy (match* (expected-out actual-out)
+  (or (equal? expected-out actual-out)
+      (match* (expected-out actual-out)
         [((list(? string? expected-single)) (list (? string? actual-single)))
          (regexp-match expected-single actual-single)]
-        [(_ _) #false]))))
-
-(require SwDev/Debugging/spy)
+        [(_ _) #false])))
 
 ;; -----------------------------------------------------------------------------
 ;; String -> [Maybe [Listof JSexpr]]
