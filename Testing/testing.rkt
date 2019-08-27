@@ -44,9 +44,9 @@
       (record inputs (list expected)))
   
   (define in:str (prepare inputs))
-  (define rx (pregexp expected))
+  (define rx (curry regexp-match (pregexp expected)))
   
-  (check-exn rx (λ () (with-output-to-bytes (λ () (with-input-from-bytes in:str main)))) msg))
+  (check-pred rx (with-output-to-bytes (λ () (with-input-from-bytes in:str main))) msg))
 
 #;[[Listof Jsexpr] [Listof Jsexpr] -> Void]
 ;; write test input and test output to next pair of test files in (recording) directory, if any 
