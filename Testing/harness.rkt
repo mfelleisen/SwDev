@@ -20,7 +20,13 @@ exec racket -tm "$0" ${1+"$@"}
   (format "~a~a-out.json" (or prefix "") numberstr))
 
 ;; TODO:
-;; -- security for student file acces (shill?) 
+;; -- security for student file acces (shill?)
+
+(define (make-client-server-contract ctc)
+  (->i (#:check [valid-json (-> any/c any)])
+       (#:cmd   (command-line-args (listof string?))
+        #:tcp   (tcp-on (or/c #false (and/c (>/c 1024) (</c 65000)))))
+       (r (->i ([tests-directory path-string?] [to-be-tested path-string?]) [r any/c]))))
 
 (provide
 
@@ -42,15 +48,11 @@ exec racket -tm "$0" ${1+"$@"}
    ;; #:check can be used to determine the validity of the JSON input
    ;;         there is also a well-formedness check (but it is diabled)
    #; (-> [List FileName [Listof JSexpr] FileName [Listof JSexpr]] Boolean)
-   (->i (#:check [valid-json (-> any/c any)])
-        (#:tcp   (tcp-on (or/c #false (and/c (>/c 1024) (</c 65000)))))
-        (r (->i ([tests-directory path-string?] [to-be-tested path-string?]) [r any/c])))]
+   (make-client-server-contract 'ctc)]
   
   [server
    ;; like client, but plays role of TCP server if tcp is #t
-   (->i (#:check [valid-json (-> any/c any)])
-        (#:tcp   (tcp-on (or/c #false (and/c (>/c 1024) (</c 65000)))))
-        (r (->i ([tests-directory path-string?] [to-be-tested path-string?]) [r any/c])))]
+   (make-client-server-contract 'ctc)]
 
   [client/no-tests
    ;; run _to-be-tested_ on test inputs from STDIN 
@@ -137,7 +139,7 @@ exec racket -tm "$0" ${1+"$@"}
 ;                                              ;;                                                    
 ;                                                                                                    
 
-(define ((server #:check valid-json #:tcp (tcp #false)) tests-directory-name program-to-be-tested)
+(define ((server #:check valid-json #:cmd (cmd '()) #:tcp (tcp #false)) tests-directory-name program-to-be-tested)
   (define setup
     (make-setup
      program-to-be-tested
@@ -150,7 +152,7 @@ exec racket -tm "$0" ${1+"$@"}
                (values #f #f)]))))
   (work-horse setup program-to-be-tested tests-directory-name valid-json))
 
-(define ((client #:check valid-json #:tcp (tcp #false)) tests-directory-name program-to-be-tested)
+(define ((client #:check valid-json #:cmd (cmd '()) #:tcp (tcp #false)) tests-directory-name program-to-be-tested)
   (define setup
     (make-setup
      program-to-be-tested
@@ -163,13 +165,13 @@ exec racket -tm "$0" ${1+"$@"}
   (define setup (make-setup program-to-be-tested connect #:stdin stdin))
   (work-horse/no-tests setup program-to-be-tested valid-json))
 
-#; ([InputPort OutputPort -> (values InputPort OutputPort)] -> Setup)
-(define (make-setup program-to-be-tested f #:stdin (config #f))
+#; ([PathString InputPort OutputPort -> (values InputPort OutputPort)] -> Setup)
+(define (make-setup program-to-be-tested f #:stdin (config #f) #:cmd (cmd '()))
   (define (setup)
     (define custodian (make-custodian))
     (parameterize ((current-custodian custodian)
                    (current-subprocess-custodian-mode 'kill))
-      (define-values (stdout stdin pid _stderr query) (spawn-process program-to-be-tested))
+      (define-values (stdout stdin pid _stderr query) (apply spawn-process program-to-be-tested cmd))
 
       (when config
         (with-input-from-file config
