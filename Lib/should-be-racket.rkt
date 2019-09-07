@@ -9,7 +9,10 @@
  =>
  when*
  unless*
- and*)
+ and*
+
+ #; {-> Void} 
+ with-error-to-string)
 
 ;; TODO make them more like the real thing  
 
@@ -54,3 +57,9 @@
 (module+ test
   (check-equal? (set-member (set 1 2 3) (λ (x) (> x 1))) (set 3 2)))
   
+;; ---------------------------------------------------------------------------------------------------
+(define (with-error-to-string proc)
+  (call-with-output-string
+    (lambda (p)
+      (parameterize ([current-error-port p])
+	(proc)))))
