@@ -12,7 +12,13 @@
  and*
 
  #; {-> Void} 
- with-error-to-string)
+ with-error-to-string
+
+ #; {[Cons X [Listof X]] -> [Listof X]}
+ all-but-last
+
+ #; {[Cons X [Listof X]] -> (values [Listof X] X)}
+ split-off-last)
 
 ;; TODO make them more like the real thing  
 
@@ -60,6 +66,33 @@
 ;; ---------------------------------------------------------------------------------------------------
 (define (with-error-to-string proc)
   (call-with-output-string
-    (lambda (p)
-      (parameterize ([current-error-port p])
-	(proc)))))
+   (lambda (p)
+     (parameterize ([current-error-port p])
+       (proc)))))
+
+(module+ test
+  (check-equal? (with-error-to-string (λ () (displayln "test" (current-error-port)))) "test\n"))
+
+;; ---------------------------------------------------------------------------------------------------
+(define (all-but-last l)
+  (if (and (pair? l) (list? l))
+      (let loop ([l l] [x (cdr l)])
+        (if (pair? x)
+            (cons (car l) (loop x (cdr x)))
+            '()))
+      (raise-argument-error 'last "(and/c list? (not/c empty?))" l)))
+
+(define (split-off-last l)
+  (define lst (gensym))
+  (if (and (pair? l) (list? l))
+      (values 
+       (let loop ([l l] [x (cdr l)])
+         (if (pair? x)
+             (cons (car l) (loop x (cdr x)))
+             (begin (set! lst (car l)) '())))
+       lst)
+      (raise-argument-error 'last "(and/c list? (not/c empty?))" l)))
+
+(module+ test
+  (check-equal? (all-but-last '(a b c)) '(a b))
+  (check-equal? (let-values (([all-but last] (split-off-last '(a c)))) `(,all-but ,last)) '((a) c)))
