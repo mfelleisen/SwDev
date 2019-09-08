@@ -8,25 +8,27 @@
  trickle-output?
  encode-all-unicode?
 
- #; {JSExpr -> Void}
+ #; {JSExpr [OutputPort] -> (U False  Void)}
  ;; effect: writes message to current output port, adds newline and flushes
  send-message
 
- #; {-> (U JSexpr x : terminal-value?)}
+ #; {[InputPort] -> (U JSexpr x : terminal-value?)}
+ ;; Read a blob of JSON, treating any network error as EOF, and only waiting for TIMEOUT seconds.
+ ;; (Because tcp-read gets RST from linux servers from time to time.)
  read-message
-
- TIMEOUT ;; seconds
- ;; (client gets this many sec. to start sending JSON, and this many more to complete the sending)
-
- #; {-> Void} 
- unset-time-out
 
  #; {Any -> Boolean : (U  NO-REACTION RESPONSE-INCOMPLETE (list ERROR String))}
  ;; what kind of error was triggered
  terminal-value?
  
  NO-REACTION
- RESPONSE-INCOMPLETE)
+ RESPONSE-INCOMPLETE
+
+ TIMEOUT ;; seconds
+ ;; (client gets this many sec. to start sending JSON, and this many more to complete the sending)
+
+ #; {-> Void} 
+ unset-time-out)
 
 ;; ---------------------------------------------------------------------------------------------------
 (require SwDev/Lib/json-pretty)
@@ -53,12 +55,13 @@
 (define trickle-output?      (make-parameter #f))
 (define encode-all-unicode?  (make-parameter #f))
 
-(define (send-message i)
-  (with-handlers ([exn:fail:network? (lambda (e) #f)])
-    (define output-bytes (format-as-bytes i))
-    (send-bytes-to-port output-bytes)
-    (if (trailing-newline?) (newline) (write-byte 32))
-    (flush-output)))
+(define (send-message i (oport (current-output-port)))
+  (parameterize ((current-output-port oport))
+    (with-handlers ([exn:fail:network? (lambda (e) #f)])
+      (define output-bytes (format-as-bytes i))
+      (send-bytes-to-port output-bytes)
+      (if (trailing-newline?) (newline) (write-byte 32))
+      (flush-output))))
 
 #; {JSExpr -> Bytes}
 (define (format-as-bytes i)
@@ -100,12 +103,10 @@
 (define (unset-time-out)
   (set! TIMEOUT 1000000000))
 
-#;{ -> (U EOF)}
-;; Read a blob of JSON, treating any network error as EOF, and only waiting for TIMEOUT seconds.
-;; (Because tcp-read gets RST from linux servers from time to time.)
-(define (read-message)
-  (with-handlers ([exn:fail:network? (lambda (_exn) eof)])
-    (read-json/timeout TIMEOUT TIMEOUT)))
+(define (read-message (iport (current-input-port)))
+  (parameterize ((current-input-port iport))
+    (with-handlers ([exn:fail:network? (lambda (_exn) eof)])
+      (read-json/timeout TIMEOUT TIMEOUT))))
 
 ;; Detects values that mean the end of the session with the remote party.
 (define (terminal-value? blob)
