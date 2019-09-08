@@ -91,8 +91,9 @@
              (cons (car l) (loop x (cdr x)))
              (begin (set! lst (car l)) '())))
        lst)
-      (raise-argument-error 'last "(and/c list? (not/c empty?))" l)))
+      (raise-argument-error 'split-off-last "(and/c list? (not/c empty?))" l)))
 
 (module+ test
   (check-equal? (all-but-last '(a b c)) '(a b))
-  (check-equal? (let-values (([all-but last] (split-off-last '(a c)))) `(,all-but ,last)) '((a) c)))
+  (check-equal? (let-values (([all-but last] (split-off-last '(a b c)))) `(,all-but ,last))
+                '((a b) c)))
