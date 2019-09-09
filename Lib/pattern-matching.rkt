@@ -4,7 +4,9 @@
   ;; SYNTAX
   #; (def/mp name:id in:pattern out:pattern)
   ;; defines name to be a simple pattern match expander from in to out
-  def/mp)
+  def/mp
+
+  (for-syntax (all-from-out syntax/parse)))
 
 ;; ---------------------------------------------------------------------------------------------------
 (require (for-syntax syntax/parse))
