@@ -1,3 +1,0 @@
-MAIN="main.rkt"
-
-raco make -v ${MAIN} && raco test ${MAIN} && PLTSTDERR="error info@cs4500-f18" raco cs4500-f18-fest $1
