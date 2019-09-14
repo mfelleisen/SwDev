@@ -29,14 +29,17 @@
 (define recording (make-parameter #false))
 
 (define (r-check-equal? main inputs expected msg)
-  (record inputs expected)
-  
   (define in:str (prepare inputs))
   (define ex:str (prepare expected))
 
-  (check-equal? (post (with-output-to-bytes (lambda () (with-input-from-bytes in:str main))))
+  (define actual (gensym))
+  (define (tee x) (set! actual x) x)
+
+  (check-equal? (tee (post (with-output-to-bytes (lambda () (with-input-from-bytes in:str main)))))
                 expected
-                msg))
+                msg)
+  
+  (record inputs actual))
 
 (define (r-check-exn main inputs expected msg)
   (if (string? inputs) 
@@ -51,7 +54,7 @@
 #;[[Listof Jsexpr] [Listof Jsexpr] -> Void]
 ;; write test input and test output to next pair of test files in (recording) directory, if any 
 (define *file-no 0)
-(define (record input output #:write-inputs (wi send-message))
+(define (record input output #:write-inputs (wi write-json #; send-message))
   (define base (recording))
   (when base
     (unless (directory-exists? base) (make-directory base))
@@ -60,7 +63,7 @@
     (define -in.json  (build-path base (format "~a-in.json" n)))
     (define -out.json (build-path base (format "~a-out.json" n)))
     (write-to -in.json input wi)
-    (write-to -out.json output (lambda (x) (send-message x) (newline)))))
+    (write-to -out.json output (lambda (x) (send-message x)))))
 
 ;; [X] [PathString [Listof X] [X -> Void] -> Void]
 ;; write and optionally replace file 
@@ -71,7 +74,7 @@
 (define (prepare x)
   (cond
     [(string? x) (string->bytes/utf-8 x)]
-    [else (bytes-append (bytes-join (map jsexpr->bytes x) #"\n"))]))
+    [else (bytes-append (bytes-join (map jsexpr->bytes x) #" "))]))
 
 #;{Bytes -> [Listof JSexpr]}
 (define (post x)
