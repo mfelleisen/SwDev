@@ -42,14 +42,17 @@
   (record inputs actual))
 
 (define (r-check-exn main inputs expected msg)
-  (if (string? inputs) 
-      (record (list inputs) (list expected) #:write-inputs displayln)
-      (record inputs (list expected)))
-  
   (define in:str (prepare inputs))
   (define rx (curry regexp-match (pregexp expected)))
   
-  (check-pred rx (with-output-to-bytes (λ () (with-input-from-bytes in:str main))) msg))
+  (define actual (gensym))
+  (define (tee x) (set! actual x) x)
+
+  (check-pred rx (tee (with-output-to-string (λ () (with-input-from-bytes in:str main)))) msg)
+
+  (if (string? inputs) 
+      (record (list inputs) (list actual) #:write-inputs displayln)
+      (record inputs (list actual))))
 
 #;[[Listof Jsexpr] [Listof Jsexpr] -> Void]
 ;; write test input and test output to next pair of test files in (recording) directory, if any 
