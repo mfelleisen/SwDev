@@ -48,7 +48,7 @@
   (define actual (gensym))
   (define (tee x) (set! actual x) x)
 
-  (check-pred rx (tee (with-output-to-string (λ () (with-input-from-bytes in:str main)))) msg)
+  (check-pred rx (tee (first (post (with-output-to-bytes (λ () (with-input-from-bytes in:str main)))))) msg)
 
   (if (string? inputs) 
       (record (list inputs) (list actual) #:write-inputs displayln)
