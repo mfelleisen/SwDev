@@ -152,8 +152,8 @@ exec racket -tm "$0" ${1+"$@"}
        (cond
          [(not tcp) (values stdout stdin)]
          [(sync/timeout ACCEPT-TIMEOUT listener) => tcp-accept]
-         [else (displayln `(failed to accept a connection within ,ACCEPT-TIMEOUT seconds))
-               (values #f #f)]))))
+         [else
+          (raise-connection-error "failed to accept a connection within ~a seconds" ACCEPT-TIMEOUT)]))))
   (work-horse setup program-to-be-tested tests-directory-name valid-json))
 
 (define ((client #:check valid-json #:cmd (cmd '()) #:tcp (tcp #false)) tests-directory-name program-to-be-tested)
@@ -162,11 +162,11 @@ exec racket -tm "$0" ${1+"$@"}
      program-to-be-tested
      cmd
      (lambda (stdout stdin)
-       (if tcp (try-to-connect-to-times 10 tcp) (values stdout stdin)))))
+       (if tcp (try-to-connect-to-times RETRY-COUNT tcp) (values stdout stdin)))))
   (work-horse setup program-to-be-tested tests-directory-name valid-json))
 
 (define ((client/no-tests #:check valid-json #:cmd (cmd '())#:tcp (tcp #f) #:stdin (stdin #f)) program-to-be-tested)
-  (define (connect stdout stdin) (if tcp (try-to-connect-to-times 10 tcp) (values stdout stdin)))
+  (define (connect stdout stdin) (if tcp (try-to-connect-to-times RETRY-COUNT tcp) (values stdout stdin)))
   (define setup (make-setup program-to-be-tested cmd connect #:stdin stdin))
   (work-horse/no-tests setup program-to-be-tested valid-json))
 
@@ -193,22 +193,22 @@ exec racket -tm "$0" ${1+"$@"}
       (values in out tear-down)))
   setup)
 
+(struct exn:fail:connection exn:fail ())
+(define (raise-connection-error msg . args)
+  (raise (exn:fail:connection (apply format msg args) (current-continuation-marks))))
+
 #; (N Port -> (values InputPort OutputPort))
 (define (try-to-connect-to-times retry-limit tcp)          
   (define-values (in out)
     (let retry ((count 1))
       (cond
-        [(> count retry-limit) (die `(no connection after ,retry-limit tries))]
+        [(> count retry-limit)
+         (raise-connection-error "no connection after ~a tries" retry-limit)]
         [else 
          (sleep 0.5)
          (with-handlers ((exn:fail:network? (lambda (x) (retry (+ 1 count)))))
            (tcp-connect LOCALHOST tcp))])))
   (values in out))
-
-#; (Any -> never returns)
-(define (die any)
-  (log-error "~v" any)
-  (exit 1))
 
 #; (PathString [Any ...] -> Void)
 (define (spawn-process command . args)
@@ -264,6 +264,12 @@ exec racket -tm "$0" ${1+"$@"}
   (log-info "received ~v" actual)
   (list (length actual) classification))
 
+(define (display-results results total-test-count)
+  (displayln
+   `((passed ,(count (lambda (v) (= v 1)) results))
+     (total ,total-test-count)
+     (partial-score ,(apply + results)))))
+
 ;; ---------------------------------------------------------------------------------------------------
 #; (Setup String Path JSONCheck -> Void)
 (define (work-horse setup program-to-be-tested tests-directory-name valid-json?)
@@ -273,14 +279,17 @@ exec racket -tm "$0" ${1+"$@"}
     (define file*      (json-test-files (in-directory tests-directory-name (lambda (_path) #f))))
     (define test*      (retrieve-all-tests file*))
     (define all-tests  (eliminate-bad-tests valid-json? test*))
-    (define passed#    (test-them setup all-tests))
     (define all-tests# (length all-tests))
-    
-    (displayln `(tested ,program-to-be-tested successfully on ,passed# cases out of ,all-tests#))))
 
-#;(Setup [Listof TestSpec] -> {0,1})
+    (with-handlers ([exn:fail:connection? (lambda (e)
+                                            (displayln (exn-message e))
+                                            (display-results '() all-tests#))])
+      (define results (test-them setup all-tests))
+      (display-results results all-tests#))))
+
+#;(Setup [Listof TestSpec] -> (List Score))
 (define (test-them setup all-tests)
-  (for/sum ((t all-tests) (i-th-test (in-naturals)))
+  (for/list ((t all-tests) (i-th-test (in-naturals)))
     (match-define `(,in-fname ,input* ,out-fname ,expected-out) t)
     (displayln `(testing ,in-fname ,out-fname) (current-error-port))
     (define actual-output
@@ -289,9 +298,7 @@ exec racket -tm "$0" ${1+"$@"}
                   [terminated ([with-and-without-trailing-newline?])]
                   [escaped    ((with-and-without-escaped-unicode?))])
         (test-one pretty trickle terminated escaped setup input*)))
-    (define comparison-result (compare input* expected-out actual-output))
-    (define judgement         (make-judgment comparison-result))
-    (if (eq? comparison-result 'ok) 1 0)))
+    (compare input* expected-out actual-output)))
 
 #; (Boolean Boolean Boolean Boolean [-> Setup] [Listof JSexpr]
             ->
@@ -326,13 +333,6 @@ exec racket -tm "$0" ${1+"$@"}
     (match-define `(,in-fname ,out-fname) x)
     (match-define `(,input ,output) (list (file->json in-fname) (file->json out-fname)))
     (list in-fname input out-fname output)))
-
-;; Symbol -> Symbol 
-(define (make-judgment comparison-result)
-  (match comparison-result
-    ['fail    'FAILED]
-    ['ok      'PASSED]
-    ['partial 'MOSTLY-FAILED]))
 
 ;; ---------------------------------------------------------------------------------------------------
 #; (InputPort OutputPort [Listof JSexpr] -> [Listof JSexpr])
@@ -420,20 +420,18 @@ exec racket -tm "$0" ${1+"$@"}
   (define score (for/sum [(entry actual-outputs)]
                   (match-define (list _classification actual-out) entry)
                   (if (compare-expected-actual expected-out actual-out) partial-score 0)))
-  (cond
-    [(= score 1) 'ok]
-    [else
-     (displayln '---------------------------------)
-     (displayln `(*** score ,score))
-     (displayln `(*** on))
-     (pretty-print input*)
-     (displayln '(*** expected))
-     (pretty-print expected-out)
-     (displayln `(*** but received))
-     (pretty-print actual-outputs)
-     (if (zero? score)
-         'fail
-         'partial)]))
+
+  (when (not (= score 1))
+    (displayln '---------------------------------)
+    (displayln `(*** score ,score))
+    (displayln `(*** on))
+    (pretty-print input*)
+    (displayln '(*** expected))
+    (pretty-print expected-out)
+    (displayln `(*** but received))
+    (pretty-print actual-outputs))
+
+  score)
 
 #; {[Listof JSExpr] [Listof JSExpr] -> Booleaan}
 (define (compare-expected-actual expected-out actual-out)
