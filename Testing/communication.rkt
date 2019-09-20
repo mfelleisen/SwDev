@@ -57,7 +57,8 @@
 
 (define (send-message i (oport (current-output-port)))
   (parameterize ((current-output-port oport))
-    (with-handlers ([exn:fail:network? (lambda (e) #f)])
+    (with-handlers ([exn:fail:network? (lambda (e) #f)]
+                    [exn:fail:filesystem? (lambda (e) #f)])
       (define output-bytes (format-as-bytes i))
       (send-bytes-to-port output-bytes)
       (if (trailing-newline?) (newline) (write-byte 32))
