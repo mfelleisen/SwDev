@@ -175,7 +175,8 @@ exec racket -tm "$0" ${1+"$@"}
   (define (setup)
     (define custodian (make-custodian))
     (parameterize ((current-custodian custodian)
-                   (current-subprocess-custodian-mode 'kill))
+                   (current-subprocess-custodian-mode 'kill)
+                   (subprocess-group-enabled #t))
       (define-values (stdout stdin pid _stderr query) (apply spawn-process program-to-be-tested cmd))
 
       (when config
