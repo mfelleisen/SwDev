@@ -62,7 +62,7 @@ exec racket -tm "$0" ${1+"$@"}
    ;;         there is also a well-formedness check (but it is diabled)
    #; (-> [List FileName [Listof JSexpr] FileName [Listof JSexpr]] Boolean)
    (make-client-server-contract)
-    #;
+   #;
    (->i (#:check [valid-json (-> any/c any)])
         (#:tcp   (tcp-on (or/c #false (and/c (>/c 1024) (</c 65000)))))
         (r (->i ([to-be-tested path-string?]) [r any/c])))]))
@@ -347,8 +347,11 @@ exec racket -tm "$0" ${1+"$@"}
   ;;  (3) in any case, when all inputs are sent, close port and read all responses 
   (define (write-and-read remaining-inputs)
     (match remaining-inputs
-      ['() (close-output-port (current-output-port))
-           (read-rest)]
+      ['()
+       ; We're pretty sure the need for this is a bug in Racket's TCP port handling.
+       (with-handlers ([exn:fail:network? (lambda (e) (void))])
+         (close-output-port (current-output-port)))
+       (read-rest)]
       [(cons i rest)
        (send-message i)
        (if batch?
@@ -484,7 +487,7 @@ exec racket -tm "$0" ${1+"$@"}
      (lambda ()
        (check-equal? (with-input-from-string "()" (all-json-expressions "nonsense"))
                      '()
-                    "false for bad file")))))
+                     "false for bad file")))))
 
 (define ((all-json-expressions f))
   (with-handlers ((exn:fail:read?
