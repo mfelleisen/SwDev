@@ -176,7 +176,7 @@ exec racket -tm "$0" ${1+"$@"}
     (define custodian (make-custodian))
     (parameterize ((current-custodian custodian)
                    (current-subprocess-custodian-mode 'kill)
-                   (subprocess-group-enabled #t))
+                   (subprocess-group-enabled (eq? (system-type) 'unix)))
       (define-values (stdout stdin pid _stderr query) (apply spawn-process program-to-be-tested cmd))
 
       (when config
@@ -187,8 +187,8 @@ exec racket -tm "$0" ${1+"$@"}
             (flush-output stdin))))
       
       (define (tear-down)
-        (custodian-shutdown-all custodian)
-        (kill-process query))
+        (kill-process query)
+        (custodian-shutdown-all custodian))
       
       (define-values (in out) (f stdout stdin))
       (values in out tear-down)))
@@ -318,7 +318,10 @@ exec racket -tm "$0" ${1+"$@"}
                    (trickle-output?      trickle)
                    (trailing-newline?    terminated)
                    (encode-all-unicode?  escaped))
-      (if (and in out) (feed-and-receive in out input*) 'failed-to-establish-connection)))
+      (if (and in out)
+	  (feed-and-receive in out input*)
+	  'failed-to-establish-connection)))
+  (log-info " ... ~v" actual)
   (tear-down)
   (list classification actual))
 
