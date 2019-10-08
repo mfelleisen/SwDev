@@ -113,7 +113,7 @@
 (define (terminal-value? blob)
   (or (eq? blob  NO-REACTION)
       (eq? blob  RESPONSE-INCOMPLETE)
-      (and (string? blob) (string<? "ERROR" blob))))
+      (and (string? blob) (regexp-match #px"ERROR" blob))))
 
 ;; Read a blob of JSON with a timeout for the first byte of input to appear
 ;; and a second timeout by which the entirety of the blob should have appeared.
