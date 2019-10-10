@@ -265,7 +265,14 @@ exec racket -tm "$0" ${1+"$@"}
   (log-info "received ~v" actual)
   (list (length actual) classification))
 
-(define (display-results results total-test-count)
+(define (display-results all-tests results total-test-count)
+  (displayln
+   (filter (lambda (x) x)
+           (for/list ([t all-tests]
+                      [r results])
+             (match-define `(,in-fname ,input* ,out-fname ,expected-out) t)
+             (and (= r 1)
+                  (list in-fname out-fname)))))
   (displayln
    `((passed ,(count (lambda (v) (= v 1)) results))
      (total ,total-test-count)
@@ -286,7 +293,7 @@ exec racket -tm "$0" ${1+"$@"}
                                             (displayln (exn-message e))
                                             (display-results '() all-tests#))])
       (define results (test-them setup all-tests))
-      (display-results results all-tests#))))
+      (display-results all-tests results all-tests#))))
 
 #;(Setup [Listof TestSpec] -> (List Score))
 (define (test-them setup all-tests)
@@ -319,8 +326,8 @@ exec racket -tm "$0" ${1+"$@"}
                    (trailing-newline?    terminated)
                    (encode-all-unicode?  escaped))
       (if (and in out)
-	  (feed-and-receive in out input*)
-	  'failed-to-establish-connection)))
+          (feed-and-receive in out input*)
+          'failed-to-establish-connection)))
   (log-info " ... ~v" actual)
   (tear-down)
   (list classification actual))
