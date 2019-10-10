@@ -507,6 +507,7 @@ exec racket -tm "$0" ${1+"$@"}
       (define next (read-message))
       (cond
         [(eof-object? next) '()]
+        [(terminal-value? next) (raise (exn:fail:read "error" (current-continuation-marks) '()))]
         [else (cons next (all-json-lines))]))))
 
 ;; -----------------------------------------------------------------------------
