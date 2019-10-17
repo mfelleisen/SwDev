@@ -334,9 +334,9 @@ exec racket -tm "$0" ${1+"$@"}
 
 #;{ type TestSpec = [List FileName JSexpr FileName JSexpr]}
 
-#;([Listof TestSpec] [JSexpr -> Boolean] -> [Listof TestSpec])
+#;([Listof TestSpec] [TestSpec -> Boolean] -> [Listof TestSpec])
 (define (eliminate-bad-tests valid-json? test*)
-  (filter (make-exn-safe valid-json?) (filter wff-json? test*)))
+  (filter (make-exn-safe valid-json?) (filter test-with-wff-json? test*)))
 
 #; ([Listof [List FileName FileName]] -> [Listof TestSpec])
 (define (retrieve-all-tests file*)
@@ -399,10 +399,8 @@ exec racket -tm "$0" ${1+"$@"}
     (when (not ok?) (displayln `(INVALID-TEST ,in-fname)))
     ok?))
 
-(define (wff-json? t)
-  #true
-  ;; why did Tony test list-ness of each input and outpu? 
-  #;
+; Check that inputs and outputs are lists rather than #f; all-json-expressions gives #f when invalid json
+(define (test-with-wff-json? t)
   (match t
     [(list _in-fname (? list?) _out-fname (? list?)) #t]
     [_ #f]))
@@ -495,14 +493,21 @@ exec racket -tm "$0" ${1+"$@"}
    (with-output-to-string
      (lambda ()
        (check-equal? (with-input-from-string "()" (all-json-expressions "nonsense"))
-                     '()
-                     "false for bad file")))))
+                     #f
+                     "false for bad file"))))
+  (check-equal?
+   (eliminate-bad-tests
+    values
+    (list
+     (list "1-in.json" (list "foo") "1-out.json" (with-input-from-string "unquoted string" (all-json-expressions "nonsense")))))
+   '())
+  )
 
 (define ((all-json-expressions f))
   (with-handlers ((exn:fail:read?
                    (lambda (xn)
                      (displayln `(,f is not a JSON file))
-                     '())))
+                     #f)))
     (let all-json-lines ()
       (define next (read-message))
       (cond
