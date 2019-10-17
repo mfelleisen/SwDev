@@ -286,14 +286,15 @@ exec racket -tm "$0" ${1+"$@"}
     
     (define file*      (json-test-files (in-directory tests-directory-name (lambda (_path) #f))))
     (define test*      (retrieve-all-tests file*))
-    (define all-tests  (eliminate-bad-tests valid-json? test*))
-    (define all-tests# (length all-tests))
+    (define all-tests# (length test*))
+    (define valid-tests  (eliminate-bad-tests valid-json? test*))
+    
 
     (with-handlers ([exn:fail:connection? (lambda (e)
                                             (displayln (exn-message e))
-                                            (display-results '() all-tests#))])
-      (define results (test-them setup all-tests))
-      (display-results all-tests results all-tests#))))
+                                            (display-results '() '() all-tests#))])
+      (define results (test-them setup valid-tests))
+      (display-results valid-tests results all-tests#))))
 
 #;(Setup [Listof TestSpec] -> (List Score))
 (define (test-them setup all-tests)
