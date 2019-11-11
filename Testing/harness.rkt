@@ -30,6 +30,7 @@ exec racket -tm "$0" ${1+"$@"}
        (r (->i ([tests-directory path-string?] clause ...) [r any/c]))))
 
 (provide
+ file->json
 
  ;; [Parameter Boolean]
  test-plain-and-pretty-json?              ;; preset by default 
@@ -335,9 +336,9 @@ exec racket -tm "$0" ${1+"$@"}
 
 #;{ type TestSpec = [List FileName JSexpr FileName JSexpr]}
 
-#;([Listof TestSpec] [TestSpec -> Boolean] -> [Listof TestSpec])
+#;([Listof TestSpec] [TestSpec -> (or/c TestSpec #f)] -> [Listof TestSpec])
 (define (eliminate-bad-tests valid-json? test*)
-  (filter (make-exn-safe valid-json?) (filter test-with-wff-json? test*)))
+  (filter-map (make-exn-safe valid-json?) (filter test-with-wff-json? test*)))
 
 #; ([Listof [List FileName FileName]] -> [Listof TestSpec])
 (define (retrieve-all-tests file*)
