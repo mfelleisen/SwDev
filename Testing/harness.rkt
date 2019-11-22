@@ -282,6 +282,8 @@ exec racket -tm "$0" ${1+"$@"}
 ;; ---------------------------------------------------------------------------------------------------
 #; (Setup String Path JSONCheck -> Void)
 (define (work-horse setup program-to-be-tested tests-directory-name valid-json?)
+  (file-stream-buffer-mode (current-output-port) 'line)
+  (file-stream-buffer-mode (current-error-port) 'line)
   (parameterize ()
     (displayln `(testing ,program-to-be-tested))
     
@@ -440,7 +442,8 @@ exec racket -tm "$0" ${1+"$@"}
     (displayln '(*** expected))
     (pretty-print expected-out)
     (displayln `(*** but received))
-    (pretty-print actual-outputs))
+    (pretty-print actual-outputs)
+    (displayln "\n"))
 
   score)
 
