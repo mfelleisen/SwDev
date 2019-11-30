@@ -23,7 +23,7 @@
  (contract-out
   [connect-to-server-as-receiver
    (->* (string? port/c) (tries/c)
-        (values (-> (-> jsexpr? (or/c eof-object? jsexpr?)) any)
+        (values (-> (-> (or/c eof-object? jsexpr?) jsexpr?) any)
                 custodian?))]))
 
 ;; ---------------------------------------------------------------------------------------------------
