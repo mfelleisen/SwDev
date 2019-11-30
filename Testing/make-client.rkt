@@ -3,6 +3,7 @@
 (require (only-in json jsexpr?))
 
 (define port/c (and/c natural-number/c (</c 60000) (>/c 10000)))
+(define tries/c natural-number/c)
 
 (provide
  port/c
@@ -21,7 +22,7 @@
  ;; failure: exn:fail:network
  (contract-out
   [connect-to-server-as-receiver
-   (->* (string? port/c) (natural-number/c) (values (-> (-> jsexpr? jsexpr?) jsexpr?) custodian?))]))
+   (->* (string? port/c) (tries/c) (values (-> (-> jsexpr? (or/c eof jsexpr?)) any) custodian?))]))
 
 ;; ---------------------------------------------------------------------------------------------------
 (require SwDev/Testing/communication)
@@ -53,7 +54,7 @@
                                              (sleep 1)
                                              (if (<= n 0) (raise xn) (tcp (- n 1))))])
           (tcp-connect server port)))))
-  #; {[JSexpr -> JSexpr] -> JSexpr}
+  #; {[JSexpr -> JSexpr] -> Void}
   (define (receive-from-server f)
     (define input (read-message in))
     (define result (f input))
