@@ -22,7 +22,9 @@
  ;; failure: exn:fail:network
  (contract-out
   [connect-to-server-as-receiver
-   (->* (string? port/c) (tries/c) (values (-> (-> jsexpr? (or/c eof jsexpr?)) any) custodian?))]))
+   (->* (string? port/c) (tries/c)
+        (values (-> (-> jsexpr? (or/c eof-object? jsexpr?)) any)
+                custodian?))]))
 
 ;; ---------------------------------------------------------------------------------------------------
 (require SwDev/Testing/communication)
