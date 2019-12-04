@@ -44,6 +44,7 @@
   #; {JSexpr -> JSexpr}
   (define (call-server j)
     (send-message j out)
+    (unset-time-out) ;; <<< 
     (read-message in))
   (values call-server custodian))
 
@@ -58,6 +59,7 @@
           (tcp-connect server port)))))
   #; {[JSexpr -> JSexpr] -> Void}
   (define (receive-from-server f)
+    (unset-time-out) ;; <<<<
     (define input (read-message in))
     (define result (f input))
     (send-message result out))
