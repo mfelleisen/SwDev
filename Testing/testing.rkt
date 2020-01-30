@@ -56,7 +56,7 @@
 
 #;[[Listof Jsexpr] [Listof Jsexpr] -> Void]
 ;; write test input and test output to next pair of test files in (recording) directory, if any 
-(define *file-no 0)
+(define *file-no -1)
 (define (record input output #:write-inputs (wi write-json #; send-message))
   (define base (recording))
   (when base
