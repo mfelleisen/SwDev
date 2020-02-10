@@ -41,6 +41,8 @@
        (if (eq? x-tag y-tag) (diff xv yv (cons x-tag path)) (package x y path))]
       ;; let struct equality kick in first 
       [((? procedure? x)   (? procedure? y)) (simple eq? x y path)]
+      [((? hash? x) (? hash? y))
+       (complex (λ _ 0) (λ (h) (hash-map h list)) x y (cons 'hash path))]
       [(_   _) (list tree1 tree2)]))
 
   (diff))

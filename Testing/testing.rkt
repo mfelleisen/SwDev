@@ -14,6 +14,11 @@
  ;; IF recording is set, also record the specified test cases as pairs of files
  r-check-equal?
 
+  #; {[-> Void] [Listof JSexpr] [Listof JSexpr] String -> Void}
+ ;; convert inputs and expected to JSON, run main on converted inputs, compare with expected via diff
+ ;; IF recording is set, also record the specified test cases as pairs of files
+ r-check-diff
+
  #; {[-> Void] (U String [Listof JSexpr]) String String -> Void}
  ;; convert inputs to JSON, run main on converted inputs, catch exn, compare with expected
  ;; IF recording is set, also record the specified test cases as pairs of files
@@ -24,6 +29,7 @@
 (require json)
 
 (require SwDev/Debugging/spy)
+(require SwDev/Debugging/diff)
 
 ;; ---------------------------------------------------------------------------------------------------
 (define recording (make-parameter #false))
@@ -37,6 +43,20 @@
 
   (check-equal? (tee (post (with-output-to-bytes (lambda () (with-input-from-bytes in:str main)))))
                 expected
+                msg)
+  
+  (record inputs actual))
+
+(define (r-check-diff main inputs expected msg)
+  (define in:str (prepare inputs))
+  (define ex:str (prepare expected))
+
+  (define actual (gensym))
+  (define (tee x) (set! actual x) x)
+
+  (check-false (diff
+                (tee (post (with-output-to-bytes (lambda () (with-input-from-bytes in:str main)))))
+                expected)
                 msg)
   
   (record inputs actual))
