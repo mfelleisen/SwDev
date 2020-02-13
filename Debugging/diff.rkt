@@ -1,9 +1,14 @@
 #lang racket
 
 (provide
- #;{Any Any -> (U False [List Any Any])}
- ;; if there is a 
+ #; {type Δ = (Δ Any Any Path)}
+ #; {type P = '[] || (list* 'vector N P) || (list* 'struct... N P) || (list* 'hash N P)}
+ 
+ #;{Any Any -> (U False Δ)}
+ ;; Δ if there is a difference, #f is there isn't
  diff)
+
+(struct Δ [left right path] #:transparent)
 
 (require "spy.rkt")
 
@@ -13,7 +18,7 @@
 (define (diff tree1 tree2)
 
   (define (package x y Pth)
-    (list x y (reverse Pth)))
+    (Δ x y (remove-vector-after-struct Pth)))
   
   (define (simple string=? x y path)
     (if (string=? x y) #f (package x y path)))
@@ -38,23 +43,47 @@
        (define yv (struct->vector y))
        (define x-tag (vector-ref xv 0))
        (define y-tag (vector-ref yv 0))
-       (if (eq? x-tag y-tag) (diff xv yv (cons x-tag path)) (package x y path))]
+       (if (eq? x-tag y-tag) (diff (slice0 xv) (slice0 yv) (cons x-tag path)) (package x y path))]
       ;; let struct equality kick in first 
       [((? procedure? x)   (? procedure? y)) (simple eq? x y path)]
       [((? hash? x) (? hash? y))
        (complex (λ _ 0) (λ (h) (hash-map h list)) x y (cons 'hash path))]
-      [(_   _) (list tree1 tree2)]))
+      [(_   _) (package tree1 tree2 path)]))
 
   (diff))
+
+#; {P -> P}
+(define (remove-vector-after-struct l)
+  (cond
+    [(empty? l) l]
+    [(empty? (rest l)) l]
+    [else
+     (define pred (first l))
+     (define-values (r _)
+       (for/fold ([r `()][pred pred]) ([x (rest l)])
+         (cond
+           [(and (eq? 'vector pred) (regexp-match "struct" (~a x))) (values (cons x r) x)]
+           [else (values (cons pred r) x)])))
+     r]))
+
+#; {Vector -> Vector}
+(define (slice0 v)
+  (list->vector (rest (vector->list v))))
+  
 
 (module+ test
 
   (check-false  (diff 1 1))
-  (check-equal? (diff 1 2) (list 1 2 '()))
+  (check-equal? (diff 1 2) (Δ 1 2 '()))
 
   (struct in  () #:transparent)
   (check-false (diff (in) (in)))
 
+  (struct in2 [x] #:transparent)
+  (check-equal? (diff [in2 '[1]] [in2 '[2]]) (Δ 1 2'[struct:in2 0 list 0]))
+
   (struct out ())
-  (define ss (list (out) (out)))
-  (check-equal? (apply diff ss) ss))
+  (define x (out))
+  (define y (out))
+  (check-equal? (diff x y) (Δ x y '[])))
+
