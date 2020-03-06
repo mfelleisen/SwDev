@@ -7,8 +7,11 @@
 (provide
  #; {(U Path-String #false) -> Void}
  ;; path-string -> write the test files into this directory; #false means no output 
- recording 
+ recording
 
+ ;; like r-check-equal? but with an equality predicate passed in first 
+ r-check
+ 
  #; {[-> Void] [Listof JSexpr] [Listof JSexpr] String -> Void}
  ;; convert inputs and expected to JSON, run main on converted inputs, compare with expected
  ;; IF recording is set, also record the specified test cases as pairs of files
@@ -44,6 +47,20 @@
   (check-equal? (tee (post (with-output-to-bytes (lambda () (with-input-from-bytes in:str main)))))
                 expected
                 msg)
+  
+  (record inputs actual))
+
+(define (r-check -equal? main inputs expected msg)
+  (define in:str (prepare inputs))
+  (define ex:str (prepare expected))
+
+  (define actual (gensym))
+  (define (tee x) (set! actual x) x)
+
+  (check -equal?
+         (tee (post (with-output-to-bytes (lambda () (with-input-from-bytes in:str main)))))
+         expected
+         msg)
   
   (record inputs actual))
 
