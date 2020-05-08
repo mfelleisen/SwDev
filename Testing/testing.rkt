@@ -1,13 +1,17 @@
 #lang racket
 
-;; a simple facility for writing tests to two files:
+;; some simple facilities for writing tests to two files:
 ;; <n>-in.json for the test input
-;; <n>-out.json for the test output 
+;; <n>-out.json for the test output
+
+;; NOTE this file is in dire need of some abstraction work 
 
 (provide
  #; {(U Path-String #false) -> Void}
  ;; path-string -> write the test files into this directory; #false means no output 
  recording
+
+ ;; SYNTAXES:
 
  ;; like r-check-equal? but with an equality predicate passed in first 
  r-check
@@ -17,7 +21,7 @@
  ;; IF recording is set, also record the specified test cases as pairs of files
  r-check-equal?
 
-  #; {[-> Void] [Listof JSexpr] [Listof JSexpr] String -> Void}
+ #; {[-> Void] [Listof JSexpr] [Listof JSexpr] String -> Void}
  ;; convert inputs and expected to JSON, run main on converted inputs, compare with expected via diff
  ;; IF recording is set, also record the specified test cases as pairs of files
  r-check-diff
@@ -27,69 +31,90 @@
  ;; IF recording is set, also record the specified test cases as pairs of files
  r-check-exn)
 
+;; ---------------------------------------------------------------------------------------------------
 (require SwDev/Testing/communication)
+(require SwDev/Debugging/diff)
 (require rackunit)
 (require json)
-
-(require SwDev/Debugging/spy)
-(require SwDev/Debugging/diff)
 
 ;; ---------------------------------------------------------------------------------------------------
 (define recording (make-parameter #false))
 
-(define (r-check-equal? main inputs expected msg)
-  (define in:str (prepare inputs))
-  (define ex:str (prepare expected))
+(define-syntax (r-check-equal? stx)
+  (syntax-case stx ()
+    [(r-check-equal? main inputs expected msg)
+     #`(begin
+         (define in:str (prepare inputs))
+         (define ex:str (prepare expected))
 
-  (define actual (gensym))
-  (define (tee x) (set! actual x) x)
+         (define actual (gensym))
+         (define (tee x) (set! actual x) x)
 
-  (check-equal? (tee (post (with-output-to-bytes (lambda () (with-input-from-bytes in:str main)))))
-                expected
-                msg)
+         #,(syntax/loc stx
+             (check-equal?
+              (tee (post (with-output-to-bytes (lambda () (with-input-from-bytes in:str main)))))
+              expected
+              msg))
   
-  (record inputs actual))
+         (record inputs actual))]))
 
-(define (r-check -equal? main inputs expected msg)
-  (define in:str (prepare inputs))
-  (define ex:str (prepare expected))
+(define-syntax (r-check stx)
+  [syntax-case stx ()
+    [(r-check -equal? main inputs expected msg)
+     #`(begin
+         (define in:str (prepare inputs))
+         (define ex:str (prepare expected))
 
-  (define actual (gensym))
-  (define (tee x) (set! actual x) x)
+         (define actual (gensym))
+         (define (tee x) (set! actual x) x)
 
-  (check -equal?
-         (tee (post (with-output-to-bytes (lambda () (with-input-from-bytes in:str main)))))
-         expected
-         msg)
+         #,(syntax/loc stx
+             (check
+              -equal?
+              (tee (post (with-output-to-bytes (lambda () (with-input-from-bytes in:str main)))))
+              expected
+              msg))
   
-  (record inputs actual))
+         (record inputs actual))]])
 
-(define (r-check-diff main inputs expected msg)
-  (define in:str (prepare inputs))
-  (define ex:str (prepare expected))
+(define-syntax (r-check-diff stx)
+  (syntax-case stx ()
+    [(r-check-diff main inputs expected msg)
+     #`(begin 
+         (define in:str (prepare inputs))
+         (define ex:str (prepare expected))
 
-  (define actual (gensym))
-  (define (tee x) (set! actual x) x)
+         (define actual (gensym))
+         (define (tee x) (set! actual x) x)
 
-  (check-false (diff
-                (tee (post (with-output-to-bytes (lambda () (with-input-from-bytes in:str main)))))
-                expected)
-                msg)
+         #,(syntax/loc stx
+             (check-false
+              (diff
+               (tee (post (with-output-to-bytes (lambda () (with-input-from-bytes in:str main)))))
+               expected)
+              msg))
   
-  (record inputs actual))
+         (record inputs actual))]))
 
-(define (r-check-exn main inputs expected msg)
-  (define in:str (prepare inputs))
-  (define rx (curry regexp-match (pregexp expected)))
+(define-syntax (r-check-exn stx)
+  (syntax-case stx ()
+    [(r-check-exn main inputs expected msg)
+     #`(begin
+         (define in:str (prepare inputs))
+         (define rx (curry regexp-match (pregexp expected)))
   
-  (define actual (gensym))
-  (define (tee x) (set! actual x) x)
+         (define actual (gensym))
+         (define (tee x) (set! actual x) x)
 
-  (check-pred rx (tee (first (post (with-output-to-bytes (λ () (with-input-from-bytes in:str main)))))) msg)
+         #,(syntax/loc stx 
+             (check-pred
+              rx
+              (tee (first (post (with-output-to-bytes (λ () (with-input-from-bytes in:str main))))))
+              msg))
 
-  (if (string? inputs) 
-      (record (list inputs) (list actual) #:write-inputs displayln)
-      (record inputs (list actual))))
+         (if (string? inputs) 
+             (record (list inputs) (list actual) #:write-inputs displayln)
+             (record inputs (list actual))))]))
 
 #;[[Listof Jsexpr] [Listof Jsexpr] -> Void]
 ;; write test input and test output to next pair of test files in (recording) directory, if any 
