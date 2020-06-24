@@ -6,3 +6,6 @@
 (define pkg-desc "Description Here")
 (define version "0.0")
 (define pkg-authors '(matthias))
+
+(define compile-omit-paths
+  '("Ideas"))
