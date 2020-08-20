@@ -22,13 +22,14 @@
  r-check-equal?
 
  #; {[-> Void] [Listof JSexpr] [Listof JSexpr] String -> Void}
- ;; convert inputs and expected to JSON, run main on converted inputs, compare with expected via diff
+ ;; convert inputs + expected to JSON, run main on converted ins, compare via diff expect #false
  ;; IF recording is set, also record the specified test cases as pairs of files
  r-check-diff
 
  #; {[-> Void] (U String [Listof JSexpr]) String String -> Void}
- ;; convert inputs to JSON, run main on converted inputs, catch exn, compare with expected
- ;; IF recording is set, also record the specified test cases as pairs of files
+ #;(r-check-exn Expected main Inputs Message)
+ ;; convert inputs to JSON, run main on converted inputs, use check-exn with Expected,
+ ;; NO RECORDING 
  r-check-exn)
 
 ;; ---------------------------------------------------------------------------------------------------
@@ -98,20 +99,18 @@
 
 (define-syntax (r-check-exn stx)
   (syntax-case stx ()
-    [(r-check-exn main inputs expected msg)
+    [(r-check-exn expected main inputs msg)
      #`(begin
          (define in:str (prepare inputs))
-         (define rx (curry regexp-match (pregexp expected)))
-  
+         
          (define actual (gensym))
          (define (tee x) (set! actual x) x)
 
          #,(syntax/loc stx 
-             (check-pred
-              rx
-              (tee (first (post (with-output-to-bytes (λ () (with-input-from-bytes in:str main))))))
-              msg))
-
+             (check-exn
+              expected (λ () (with-output-to-bytes (λ () (with-input-from-bytes in:str main)))) msg))
+         
+         #;
          (if (string? inputs) 
              (record (list inputs) (list actual) #:write-inputs displayln)
              (record inputs (list actual))))]))
@@ -120,15 +119,16 @@
 ;; write test input and test output to next pair of test files in (recording) directory, if any 
 (define *file-no -1)
 (define (record input output #:write-inputs (wi write-json #; send-message))
-  (define base (recording))
-  (when base
-    (unless (directory-exists? base) (make-directory base))
-    (set! *file-no (+ *file-no 1))
-    (define n (~a *file-no))
-    (define -in.json  (build-path base (format "~a-in.json" n)))
-    (define -out.json (build-path base (format "~a-out.json" n)))
-    (write-to -in.json input wi)
-    (write-to -out.json output (lambda (x) (send-message x)))))
+  (unless (symbol? output)
+    (define base (recording))
+    (when base
+      (unless (directory-exists? base) (make-directory base))
+      (set! *file-no (+ *file-no 1))
+      (define n (~a *file-no))
+      (define -in.json  (build-path base (format "~a-in.json" n)))
+      (define -out.json (build-path base (format "~a-out.json" n)))
+      (write-to -in.json input wi)
+      (write-to -out.json output (lambda (x) (send-message x))))))
 
 ;; [X] [PathString [Listof X] [X -> Void] -> Void]
 ;; write and optionally replace file 
