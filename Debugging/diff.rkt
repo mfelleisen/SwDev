@@ -47,7 +47,10 @@
       ;; let struct equality kick in first 
       [((? procedure? x)   (? procedure? y)) (simple eq? x y path)]
       [((? hash? x) (? hash? y))
-       (complex (λ _ 0) (λ (h) (hash-map h list)) x y (cons 'hash path))]
+       (complex (λ _ 0)
+                (λ (h) (sort (hash-map h list) string<=? #:key (compose symbol->string first)))
+                x y
+                (cons 'hash path))]
       [(_   _) (package tree1 tree2 path)]))
 
   (diff))
