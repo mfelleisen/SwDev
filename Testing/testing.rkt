@@ -11,6 +11,11 @@
  ;; path-string -> write the test files into this directory; #false means no output 
  recording
 
+ #; {Natural -> Void}
+ ;; start numbering the test files from here: 0, 1, 2, ... is default
+ #; (start-at 0) ; gets us 1, 2, 3 ...
+ start-at 
+
  ;; SYNTAXES:
 
  ;; like r-check-equal? but with an equality predicate passed in first 
@@ -40,6 +45,7 @@
 
 ;; ---------------------------------------------------------------------------------------------------
 (define recording (make-parameter #false))
+(define start-at  (make-parameter -1))
 
 (define-syntax (r-check-equal? stx)
   (syntax-case stx ()
@@ -117,14 +123,13 @@
 
 #;[[Listof Jsexpr] [Listof Jsexpr] -> Void]
 ;; write test input and test output to next pair of test files in (recording) directory, if any 
-(define *file-no -1)
 (define (record input output #:write-inputs (wi write-json #; send-message))
   (unless (symbol? output)
     (define base (recording))
     (when base
       (unless (directory-exists? base) (make-directory base))
-      (set! *file-no (+ *file-no 1))
-      (define n (~a *file-no))
+      (start-at (+ (start-at) 1))
+      (define n (~a (start-at)))
       (define -in.json  (build-path base (format "~a-in.json" n)))
       (define -out.json (build-path base (format "~a-out.json" n)))
       (write-to -in.json input wi)
