@@ -38,6 +38,7 @@ exec racket -tm "$0" ${1+"$@"}
  test-with-and-without-trailing-newline? 
  test-with-and-without-escaped-unicode?
  test-with-batch-mode?
+ test-the-first-n-at-most                 ;; how many of the tests will be used, maximally
  
  (contract-out
   [client
@@ -88,8 +89,6 @@ exec racket -tm "$0" ${1+"$@"}
 (require json)
 (require (for-syntax racket/syntax))
 
-(require SwDev/Debugging/spy)
-
 (module+ test
   (require rackunit))
 
@@ -115,6 +114,7 @@ exec racket -tm "$0" ${1+"$@"}
 (define test-with-and-without-trailing-newline? (make-parameter #f))
 (define test-with-and-without-escaped-unicode?  (make-parameter #f))
 (define test-with-batch-mode?                   (make-parameter #f))
+(define test-the-first-n-at-most                (make-parameter +inf.0))
 
 ;; This is to make the external parameter names consistent with Tony's implementation 
 (define-syntax (def/setting stx)
@@ -344,7 +344,7 @@ exec racket -tm "$0" ${1+"$@"}
 
 #; ([Listof [List FileName FileName]] -> [Listof TestSpec])
 (define (retrieve-all-tests file*)
-  (for/list ((x file*))
+  (for/list ((x file*) (_i (in-naturals)) #:when (< _i (test-the-first-n-at-most)))
     (match-define `(,in-fname ,out-fname) x)
     (match-define `(,input ,output) (list (file->json in-fname) (file->json out-fname)))
     (list in-fname input out-fname output)))
