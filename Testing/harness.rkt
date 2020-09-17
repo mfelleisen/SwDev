@@ -143,32 +143,42 @@ exec racket -tm "$0" ${1+"$@"}
 ;                                              ;;                                                    
 ;                                                                                                    
 
-(define ((server #:check valid-json #:cmd (cmd '()) #:tcp (tcp #false)) tests-directory-name program-to-be-tested)
-  (define setup
-    (make-setup
-     program-to-be-tested
-     cmd
-     (lambda (stdout stdin)
-       (define listener (tcp-listen (or tcp REMOTE-PORT) 30 #true))
-       (cond
-         [(not tcp) (values stdout stdin)]
-         [(sync/timeout ACCEPT-TIMEOUT listener) => tcp-accept]
-         [else
-          (raise-connection-error "failed to accept a connection within ~a seconds" ACCEPT-TIMEOUT)]))))
+(define ((server #:check valid-json
+                 #:cmd   (cmd '())
+                 #:tcp   (tcp #false))
+         tests-directory-name program-to-be-tested)
+  #; {InputPort OutputPort -> (values InputPort OutputPort)}
+  ;; deliver two ports on which communication with the client happens 
+  (define (connect stdout stdin)
+    (define listener (tcp-listen (or tcp REMOTE-PORT) 30 #true))
+    (cond
+      [(not tcp) (values stdout stdin)]
+      [(sync/timeout ACCEPT-TIMEOUT listener) => tcp-accept]
+      [else
+       (raise-connection-error "failed to accept a connection within ~a seconds" ACCEPT-TIMEOUT)]))
+
+  (define setup (make-setup program-to-be-tested cmd connect))
   (work-horse setup program-to-be-tested tests-directory-name valid-json))
 
-(define ((client #:check valid-json #:cmd (cmd '()) #:tcp (tcp #false)) tests-directory-name program-to-be-tested)
-  (define setup
-    (make-setup
-     program-to-be-tested
-     cmd
-     (lambda (stdout stdin)
-       (if tcp (try-to-connect-to-times RETRY-COUNT tcp) (values stdout stdin)))))
+(define ((client #:check valid-json
+                 #:cmd   (cmd '())
+                 #:tcp   (tcp #false))
+         tests-directory-name program-to-be-tested)
+  #; {InputPort OutputPort -> (values InputPort OutputPort)}
+  ;; deliver two ports on which communication with the server happens 
+  (define (connect stdout stdin)
+    (if tcp (try-to-connect-to-times RETRY-COUNT tcp) (values stdout stdin)))
+
+  (define setup (make-setup program-to-be-tested cmd connect))
   (work-horse setup program-to-be-tested tests-directory-name valid-json))
 
-(define ((client/no-tests #:check valid-json #:cmd (cmd '())#:tcp (tcp #f) #:stdin (stdin #f)) program-to-be-tested)
-  (define (connect stdout stdin) (if tcp (try-to-connect-to-times RETRY-COUNT tcp) (values stdout stdin)))
-  (define setup (make-setup program-to-be-tested cmd connect #:stdin stdin))
+(define ((client/no-tests #:check valid-json
+                          #:cmd   (cmd '())
+                          #:tcp   (tcp #f)
+                          #:stdin (stdin #f))
+         program-to-be-tested)
+  (define (x stdout stdin) (if tcp (try-to-connect-to-times RETRY-COUNT tcp) (values stdout stdin)))
+  (define setup (make-setup program-to-be-tested cmd x #:stdin stdin))
   (work-horse/no-tests setup program-to-be-tested valid-json))
 
 #; ([PathString [Listof String]InputPort OutputPort -> (values InputPort OutputPort)] -> Setup)
@@ -403,7 +413,7 @@ exec racket -tm "$0" ${1+"$@"}
     (when (not ok?) (displayln `(INVALID-TEST ,in-fname)))
     ok?))
 
-; Check that inputs and outputs are lists rather than #f; all-json-expressions gives #f when invalid json
+; Check that inputs & outputs are lists, not #f; all-json-expressions gives #f when invalid json
 (define (test-with-wff-json? t)
   (match t
     [(list _in-fname (? list?) _out-fname (? list?)) #t]
@@ -504,7 +514,10 @@ exec racket -tm "$0" ${1+"$@"}
    (eliminate-bad-tests
     values
     (list
-     (list "1-in.json" (list "foo") "1-out.json" (with-input-from-string "unquoted string" (all-json-expressions "nonsense")))))
+     (list "1-in.json"
+           (list "foo")
+           "1-out.json"
+           (with-input-from-string "unquoted string" (all-json-expressions "nonsense")))))
    '())
   )
 
