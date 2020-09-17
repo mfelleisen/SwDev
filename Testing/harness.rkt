@@ -556,24 +556,16 @@ exec racket -tm "$0" ${1+"$@"}
   
   (check-equal? (json-test-files (append path0 path1)) strg0))
 
+#; {[Listof PathString] -> [Listof [List PathString PathString]]}
 (define (json-test-files d)
+  #; [Listof PathString]
+  ;; such that their suffix is '.json'
   (define all-json-files
     (for/list ((f d)  #:when #px"^(.*/)?([^/]+-)?[0-9]+-[^/]*.json$")
       (path->string f)))
 
-  (define (path-with-file-named x)
-    (findf (lambda (f) (and (>= (string-length f) (string-length x))
-                            (equal? (substring f
-                                               (- (string-length f) (string-length x))
-                                               (string-length f))
-                                    x)
-                            (or (= (string-length f) (string-length x))
-                                (char=? (string-ref f (- (string-length f) (string-length x) 1))
-                                        #\/))))
-           all-json-files))
-
-  (sort
-   (remove-duplicates
+  #; [listof [List PathString PathString]]
+  (define the-files
     (filter-map
      (lambda (input-filename)
        (cond
@@ -582,12 +574,27 @@ exec racket -tm "$0" ${1+"$@"}
           (match-lambda
             [(list _entire _dir prefix numberstr)
              (define matched-name    (matching-output-file-name prefix numberstr))
-             (define output-filename (path-with-file-named matched-name))
+             (define output-filename (path-with-file-named all-json-files matched-name))
              (and output-filename (list input-filename output-filename))])]
          [else #f]))
      all-json-files))
-   string<?
-   #:key car))
+
+  (define -duplicates (remove-duplicates the-files))
+
+  (sort -duplicates string<? #:key car))
+
+#; {[Listof PathString] String -> PathString}
+;; find the full path string for the file named `x` :: guaranteed due to call site 
+(define (path-with-file-named all-json-files x)
+  (findf (lambda (f) (and (>= (string-length f) (string-length x))
+                          (equal? (substring f
+                                             (- (string-length f) (string-length x))
+                                             (string-length f))
+                                  x)
+                          (or (= (string-length f) (string-length x))
+                              (char=? (string-ref f (- (string-length f) (string-length x) 1))
+                                      #\/))))
+         all-json-files))
 
 #|
 
