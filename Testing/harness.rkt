@@ -30,6 +30,8 @@ exec racket -tm "$0" ${1+"$@"}
        (r (->i ([tests-directory path-string?] clause ...) [r any/c]))))
 
 (provide
+ unset-time-out
+
  file->json
 
  ;; [Parameter Boolean]

@@ -19,7 +19,7 @@
      #'(begin
          (define n (length '(expected ...)))
          (define x (call-with-values (λ () actual) list))
-         (check-equal? (length x) (length '(temp ...)) (~a n "values expected, but not received"))
+         (check-equal? (length x) (length '(temp ...)) (~a n " values expected, but not received"))
          (unless (= (length x) (length '(temp ...)))
            (check-equal? x (list expected ...)))
          (when (= (length x) (length '(temp ...)))

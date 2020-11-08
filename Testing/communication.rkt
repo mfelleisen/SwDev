@@ -27,7 +27,7 @@
  TIMEOUT ;; seconds
  ;; (client gets this many sec. to start sending JSON, and this many more to complete the sending)
 
- #; {-> Void} 
+ #; {#:limit -> Void} 
  unset-time-out)
 
 ;; ---------------------------------------------------------------------------------------------------
@@ -101,8 +101,8 @@
 
 (define TIMEOUT 10) ;; seconds. See read-json-safely/timeout.
 
-(define (unset-time-out)
-  (set! TIMEOUT 1000000000))
+(define (unset-time-out #:limit (limit 1000))
+  (set! TIMEOUT limit))
 
 (define (read-message (iport (current-input-port)))
   (parameterize ((current-input-port iport))
