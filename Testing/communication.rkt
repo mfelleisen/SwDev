@@ -27,6 +27,9 @@
  TIMEOUT ;; seconds
  ;; (client gets this many sec. to start sending JSON, and this many more to complete the sending)
 
+ io-time-out
+
+ ;; for backwards compatibility 
  #; {#:limit -> Void} 
  unset-time-out)
 
@@ -100,14 +103,15 @@
 (define RESPONSE-INCOMPLETE "Timed out waiting for reading to complete.")
 
 (define TIMEOUT 10) ;; seconds. See read-json-safely/timeout.
+(define io-time-out (make-parameter TIMEOUT))
 
 (define (unset-time-out #:limit (limit 1000))
-  (set! TIMEOUT limit))
+  (io-time-out limit))
 
 (define (read-message (iport (current-input-port)))
   (parameterize ((current-input-port iport))
     (with-handlers ([exn:fail:network? (lambda (_exn) eof)])
-      (read-json/timeout TIMEOUT TIMEOUT))))
+      (read-json/timeout (io-time-out) (io-time-out)))))
 
 ;; Detects values that mean the end of the session with the remote party.
 (define (terminal-value? blob)
