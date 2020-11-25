@@ -65,10 +65,12 @@ exec racket -tm "$0" ${1+"$@"}
    ;; #:check can be used to determine the validity of the JSON input
    ;;         there is also a well-formedness check (but it is diabled)
    #; (-> [List FileName [Listof JSexpr] FileName [Listof JSexpr]] Boolean)
-   (make-client-server-contract)
-   #;
-   (->i (#:check [valid-json (-> any/c any)])
-        (#:tcp   (tcp-on (or/c #false (and/c (>/c 1024) (</c 65000)))))
+   
+   #; (make-client-server-contract)
+   (->i ()
+        (#:stdin (stdin path-string?)   ;; a file to be re-directed into `to-be-tested`
+         #:cmd   (cmd (listof string?)) ;; command line arguments 
+         #:tcp   (tcp-on (or/c #false (and/c (>/c 1024) (</c 65000)))))
         (r (->i ([to-be-tested path-string?]) [r any/c])))]))
 
 ;                                                                                      
@@ -174,14 +176,13 @@ exec racket -tm "$0" ${1+"$@"}
   (define setup (make-setup program-to-be-tested cmd connect))
   (work-horse setup program-to-be-tested tests-directory-name valid-json))
 
-(define ((client/no-tests #:check valid-json
-                          #:cmd   (cmd '())
+(define ((client/no-tests #:cmd   (cmd '())
                           #:tcp   (tcp #f)
                           #:stdin (stdin #f))
          program-to-be-tested)
   (define (x stdout stdin) (if tcp (try-to-connect-to-times RETRY-COUNT tcp) (values stdout stdin)))
   (define setup (make-setup program-to-be-tested cmd x #:stdin stdin))
-  (work-horse/no-tests setup program-to-be-tested valid-json))
+  (work-horse/no-tests setup program-to-be-tested))
 
 #; ([PathString [Listof String]InputPort OutputPort -> (values InputPort OutputPort)] -> Setup)
 (define (make-setup program-to-be-tested cmd f #:stdin (config #f))
@@ -248,7 +249,7 @@ exec racket -tm "$0" ${1+"$@"}
 ;                                                                 
 
 #; (Setup String JSONCheck -> Void)
-(define (work-horse/no-tests setup program-to-be-tested valid-json?)
+(define (work-horse/no-tests setup program-to-be-tested)
   (displayln `(running ,program-to-be-tested))
   (for* ([pretty     ([plain-and-pretty-json?])]
          [trickle    ((fast-and-slow-delivery?))]
