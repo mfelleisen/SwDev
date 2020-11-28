@@ -43,6 +43,20 @@ exec racket -tm "$0" ${1+"$@"}
  test-the-first-n-at-most                 ;; how many of the tests will be used, maximally
  
  (contract-out
+
+  (make-setup
+  #; (PathString [Listof String] [InputPort OutputPort -> (values InputPort OutputPort)] -> Setup)
+  #;(define (x stdout stdin) (if tcp (try-to-connect-to-times RETRY-COUNT tcp) (values stdout stdin)))
+  #; (make-setup "./xfoo" (list "10" "45678") x)
+  ;; sets up `xfoo`to run as a subprocess (group),
+  ;; applies x to the STDOUT and STDIN ports, which are the ports for "us" to read outputs of `xfoo`
+  ;;    or feed it inputs
+  ;; creates a thunk for tearing down the process group 
+  (->i ([program-to-be-tested path-string?]
+        [cmd-line-flags       (listof string?)]
+        [align-in-out         (-> input-port? output-port? (values input-port? output-port? ))])
+       (r (-> (values input-port? output-port? (-> any/c))))))
+
   [client
    ;; run _to-be-tested_ on tests in _test-directory_
    ;; the directory contains pairs of files:
@@ -111,7 +125,7 @@ exec racket -tm "$0" ${1+"$@"}
 ;   ;                                                                    
 ;   ;                                                                    
 
-#; {type Setup = [->* InputPort OutputPort [-> Void]]}
+#; {type Setup = [-> (values InputPort OutputPort [-> Void])]}
 
 (define test-plain-and-pretty-json?             (make-parameter #t))
 (define test-fast-and-slow-delivery?            (make-parameter #f))
@@ -184,7 +198,7 @@ exec racket -tm "$0" ${1+"$@"}
   (define setup (make-setup program-to-be-tested cmd x #:stdin stdin))
   (work-horse/no-tests setup program-to-be-tested))
 
-#; ([PathString [Listof String]InputPort OutputPort -> (values InputPort OutputPort)] -> Setup)
+#; ([PathString [Listof String] InputPort OutputPort -> (values InputPort OutputPort)] -> Setup)
 (define (make-setup program-to-be-tested cmd f #:stdin (config #f))
   (define (setup)
     (define custodian (make-custodian))
