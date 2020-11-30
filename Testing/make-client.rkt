@@ -24,6 +24,7 @@
  ;; when connected, it runs (init ip)
  ;; failure: exn:fail:network
  (contract-out
+  (broken (-> string? any))
   [connect-to-server-as-receiver
    (->* (string? port/c) (tries/c #:init (-> output-port? any))
         (values (-> (-> (or/c eof-object? jsexpr?) jsexpr?) any)
@@ -43,14 +44,19 @@
     (read-message in))
   (values call-server custodian))
 
+(struct broken [x])
+#; {type Broken = (broken String)}
+;; allow connect-to-server-as-receiver to send alternative strings 
+
 (define (connect-to-server-as-receiver server port (tries TCP-TRIES) #:init (init void))
   (define-values (custodian in out) (connect server port tries))
   (init out)
   #; {[JSexpr -> JSexpr] -> Void}
   (define (receive-from-server f)
     (define input (read-message in))
-    (define result (f input))
-    (send-message result out))
+    (match (f input)
+      [(broken result) (writeln result out) (flush-output out)]
+      [result (send-message result out)]))
   (values receive-from-server custodian))
 
 #; {IP-Address Port N -> (values Custodian Input-Port Output-Port)}
