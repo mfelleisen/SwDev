@@ -2,11 +2,12 @@
 
 ;; ---------------------------------------------------------------------------------------------------
 (provide
- ;; send parameters (booleans)
+ ;; send parameters 
  trailing-newline?    ;; by default, #t
  pretty-print-output? ;; all others are off by default 
- trickle-output?
- encode-all-unicode?
+ trickle-output?      ;; boolean? 
+ encode-all-unicode?  ;; boolean?
+ prefix-with-spaces   ;; natural? 
 
  #; {JSExpr [OutputPort] -> (U False  Void)}
  ;; effect: writes message to current output port, adds newline and flushes
@@ -57,6 +58,7 @@
 (define pretty-print-output? (make-parameter #f))
 (define trickle-output?      (make-parameter #f))
 (define encode-all-unicode?  (make-parameter #f))
+(define prefix-with-spaces   (make-parameter 0))
 
 (define (send-message i (oport (current-output-port)))
   (parameterize ((current-output-port oport))
@@ -77,6 +79,7 @@
 (define (send-bytes-to-port output-bytes)
   (define output-length (bytes-length output-bytes))
   (define chunk-size    (max (quotient output-length 100) 10))
+  (write-bytes (make-bytes (prefix-with-spaces) (bytes-ref #" " 0)))
   (if (not (trickle-output?))
       (write-bytes output-bytes)
       (for [(offset (in-range 0 output-length chunk-size))]
