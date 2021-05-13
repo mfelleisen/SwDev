@@ -18,7 +18,11 @@
                    [src  (syntax-source (syntax e))]
                    [line (syntax-line #'e)]
                    [col  (syntax-column #'e)])
-       #'(let ([val e]) (rendering val 'expr src `(line: ,line col: ,col)) val))]))
+       #'(call-with-values (λ () e)
+                           (λ val*
+                             (define val (if (null? (rest val*)) (first val*) (cons 'values val*)))
+                             (rendering val 'expr src `(line: ,line col: ,col))
+                             (if (null? (rest val*)) (first val*) (apply values val*)))))]))
 
 (define (to-error-port val expr src loc)
   (fprintf (current-error-port) "Expression~n~a~nat ~a : ~a~nevaluated to~n~v~n~n" expr src loc val))
