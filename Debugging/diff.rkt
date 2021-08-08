@@ -51,6 +51,12 @@
                 (λ (h) (sort (hash-map h list) string<=? #:key (compose symbol->string first)))
                 x y
                 (cons 'hash path))]
+      [((? set? x) (? set? y))
+       (define x-y (set-subtract x y))
+       (define y-x (set-subtract y x))
+       (if (and (set-empty? x-y) (set-empty? y-x))
+           #false
+           (package x-y y-x (cons 'set path)))]
       [(_   _) (package tree1 tree2 path)]))
 
   (diff))
@@ -75,6 +81,8 @@
   
 
 (module+ test
+
+  (diff (set 'a 'b) (set 'a))
 
   (check-false  (diff 1 1))
   (check-equal? (diff 1 2) (Δ 1 2 '()))
