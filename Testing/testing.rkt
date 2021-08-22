@@ -123,7 +123,7 @@
 
 #;[[Listof Jsexpr] [Listof Jsexpr] -> Void]
 ;; write test input and test output to next pair of test files in (recording) directory, if any 
-(define (record input output #:write-inputs (wi write-json #; send-message))
+(define (record input output #:write-inputs (wi send-message))
   (unless (symbol? output)
     (define base (recording))
     (when base
