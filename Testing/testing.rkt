@@ -31,7 +31,6 @@
  ;; IF recording is set, also record the specified test cases as pairs of files
  r-check-diff
 
- #; {[-> Void] (U String [Listof JSexpr]) String String -> Void}
  #;(r-check-exn Expected main Inputs Message)
  ;; convert inputs to JSON, run main on converted inputs, use check-exn with Expected,
  ;; NO RECORDING 
@@ -40,6 +39,7 @@
 ;; ---------------------------------------------------------------------------------------------------
 (require SwDev/Testing/communication)
 (require SwDev/Debugging/diff)
+(require SwDev/Lib/should-be-racket)
 (require rackunit)
 (require json)
 
@@ -56,6 +56,8 @@
 
          (define actual (gensym))
          (define (tee x) (set! actual x) x)
+
+         (void msg)
 
          #,(syntax/loc stx
              (check-equal?
@@ -114,12 +116,10 @@
 
          #,(syntax/loc stx 
              (check-exn
-              expected (λ () (with-output-to-bytes (λ () (with-input-from-bytes in:str main)))) msg))
-         
-         #;
-         (if (string? inputs) 
-             (record (list inputs) (list actual) #:write-inputs displayln)
-             (record inputs (list actual))))]))
+              expected
+              (λ ()
+                (dev/null
+                 (with-output-to-bytes (λ () (with-input-from-bytes in:str main)))) msg))))]))
 
 #;[[Listof Jsexpr] [Listof Jsexpr] -> Void]
 ;; write test input and test output to next pair of test files in (recording) directory, if any 

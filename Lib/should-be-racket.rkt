@@ -14,6 +14,9 @@
  #; {-> Void} 
  with-error-to-string
 
+ #; (dev/null e0 e ...)
+ dev/null 
+
  #; {[Cons X [Listof X]] -> [Listof X]}
  all-but-last
 
@@ -63,6 +66,11 @@
 (module+ test
   (check-equal? (set-member (set 1 2 3) (λ (x) (> x 1))) (set 3 2)))
   
+;; ---------------------------------------------------------------------------------------------------
+(define-syntax-rule (dev/null e0 e ...)
+  (parameterize ([current-error-port (open-output-string)])
+    e0 e ...))
+
 ;; ---------------------------------------------------------------------------------------------------
 (define (with-error-to-string proc)
   (call-with-output-string
