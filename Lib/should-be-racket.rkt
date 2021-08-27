@@ -11,6 +11,8 @@
  unless*
  and*
 
+ random-pick
+
  #; {-> Void} 
  with-error-to-string
 
@@ -106,3 +108,8 @@
   (check-equal? (all-but-last '(a b c)) '(a b))
   (check-equal? (let-values (([all-but last] (split-off-last '(a b c)))) `(,all-but ,last))
                 '((a b) c)))
+
+;; -----------------------------------------------------------------------------
+
+(define (random-pick lox)
+  (list-ref lox (random (length lox))))
