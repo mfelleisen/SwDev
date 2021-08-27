@@ -68,7 +68,8 @@
   
 ;; ---------------------------------------------------------------------------------------------------
 (define-syntax-rule (dev/null e0 e ...)
-  (parameterize ([current-error-port (open-output-string)])
+  (parameterize ([current-output-port (open-output-string)]
+		 [current-error-port (open-output-string)])
     e0 e ...))
 
 ;; ---------------------------------------------------------------------------------------------------
