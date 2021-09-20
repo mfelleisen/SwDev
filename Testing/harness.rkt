@@ -478,7 +478,7 @@ exec racket -tm "$0" ${1+"$@"}
 (define (compare-expected-actual expected-out actual-out)
   (or (equal? expected-out actual-out)
       (match* (expected-out actual-out)
-        [((list(? string? expected-single)) (list (? string? actual-single)))
+        [((list (? string? expected-single)) (list (? string? actual-single)))
          (regexp-match expected-single actual-single)]
         [(_ _) #false])))
 
