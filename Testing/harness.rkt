@@ -26,6 +26,7 @@ exec racket -tm "$0" ${1+"$@"}
   (make-client-server-contract clause ...)
   (->i (#:check [valid-json (-> any/c any)])
        (#:cmd   (command-line-args (listof string?))
+        #:inexact-okay? [ok (or/c #false (and/c real? (</c 1.0) (>/c 0.0)))]
         #:tcp   (tcp-on (or/c #false (and/c (>/c 1024) (</c 65000)))))
        (r (->i ([tests-directory path-string?] clause ...) [r any/c]))))
 
@@ -104,6 +105,7 @@ exec racket -tm "$0" ${1+"$@"}
 
 (require SwDev/Testing/communication)
 (require SwDev/Testing/tcp)
+(require SwDev/Lib/json-equal)
 (require json)
 (require (for-syntax racket/syntax))
 
@@ -146,6 +148,9 @@ exec racket -tm "$0" ${1+"$@"}
 (def/setting with-and-without-trailing-newline? '(#t #f) '(#t))
 (def/setting with-and-without-escaped-unicode?  '(#f #t) '(#f))
 
+(define json-precision (make-parameter #false))
+
+
 ;                                                                                                    
 ;                                                                                                    
 ;                                                                  ;;;       ;                   ;   
@@ -163,6 +168,7 @@ exec racket -tm "$0" ${1+"$@"}
 
 (define ((server #:check valid-json
                  #:cmd   (cmd '())
+                 #:inexact-okay? [p 0.001]
                  #:tcp   (tcp #false))
          tests-directory-name program-to-be-tested)
   #; {InputPort OutputPort -> (values InputPort OutputPort)}
@@ -174,21 +180,22 @@ exec racket -tm "$0" ${1+"$@"}
       [(sync/timeout ACCEPT-TIMEOUT listener) => tcp-accept]
       [else
        (raise-connection-error "failed to accept a connection within ~a seconds" ACCEPT-TIMEOUT)]))
-
+  (json-precision p)
   (define setup (make-setup program-to-be-tested cmd connect))
-  (work-horse setup program-to-be-tested tests-directory-name valid-json))
+  (work-horse setup program-to-be-tested tests-directory-name valid-json p))
 
 (define ((client #:check valid-json
                  #:cmd   (cmd '())
+                 #:inexact-okay? [p 0.001]
                  #:tcp   (tcp #false))
          tests-directory-name program-to-be-tested)
   #; {InputPort OutputPort -> (values InputPort OutputPort)}
   ;; deliver two ports on which communication with the server happens 
   (define (connect stdout stdin)
     (if tcp (try-to-connect-to-times RETRY-COUNT tcp) (values stdout stdin)))
-
+  (json-precision p)
   (define setup (make-setup program-to-be-tested cmd connect))
-  (work-horse setup program-to-be-tested tests-directory-name valid-json))
+  (work-horse setup program-to-be-tested tests-directory-name valid-json p))
 
 (define ((client/no-tests #:cmd   (cmd '())
                           #:tcp   (tcp #f)
@@ -475,8 +482,28 @@ exec racket -tm "$0" ${1+"$@"}
   score)
 
 #; {[Listof JSExpr] [Listof JSExpr] -> Booleaan}
+
+(module+ test
+  (json-precision 0.001)
+  (check-true (compare-expected-actual 3.0 3))
+  
+  (check-true (compare-expected-actual #f #f))
+  (check-false (compare-expected-actual #f 3))
+
+  (check-true (compare-expected-actual (json-null) (json-null)))
+
+  (check-true (compare-expected-actual "🤪" "🤪"))
+  (check-false (compare-expected-actual "🤪" "🤪 hello"))
+
+  (check-true (compare-expected-actual (hash 'a 3.0 'b "hello world") (hash 'b "hello world"  'a 3)))
+  (check-true
+   (compare-expected-actual (list "a" 3.0 "b" "hello world") (list "a" 3 "b" "hello world")))
+
+  (check-false (compare-expected-actual cons cons) "the function dispatches on JSON only")
+  (check-false (compare-expected-actual 'a 'a) "the function dispatches on JSON only"))
+
 (define (compare-expected-actual expected-out actual-out)
-  (or (equal? expected-out actual-out)
+  (or (json-equal? expected-out actual-out #:inexact-okay? (json-precision))
       (match* (expected-out actual-out)
         [((list (? string? expected-single)) (list (? string? actual-single)))
          (regexp-match expected-single actual-single)]

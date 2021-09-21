@@ -31,8 +31,9 @@
       [(list? x)      (and (list? y) (= (length x) (length y)) (andmap loop x y))]
       [(hash? x)      (and (hash? y)
                            (= (length (hash->list x)) (length (hash->list y)))
-                           (for/and ([(xkey x) x] [(ykey y) y])
-                             (and (eq? xkey ykey) (loop x y))))]
+                           (for/and ([(xkey x) x])
+                             (and (hash-has-key? y xkey)
+                                  (loop x (hash-ref y xkey)))))]
       [else #false])))
 
 (define (=~ a b c)
