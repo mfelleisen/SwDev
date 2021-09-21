@@ -182,7 +182,7 @@ exec racket -tm "$0" ${1+"$@"}
        (raise-connection-error "failed to accept a connection within ~a seconds" ACCEPT-TIMEOUT)]))
   (json-precision p)
   (define setup (make-setup program-to-be-tested cmd connect))
-  (work-horse setup program-to-be-tested tests-directory-name valid-json p))
+  (work-horse setup program-to-be-tested tests-directory-name valid-json))
 
 (define ((client #:check valid-json
                  #:cmd   (cmd '())
@@ -195,7 +195,7 @@ exec racket -tm "$0" ${1+"$@"}
     (if tcp (try-to-connect-to-times RETRY-COUNT tcp) (values stdout stdin)))
   (json-precision p)
   (define setup (make-setup program-to-be-tested cmd connect))
-  (work-horse setup program-to-be-tested tests-directory-name valid-json p))
+  (work-horse setup program-to-be-tested tests-directory-name valid-json))
 
 (define ((client/no-tests #:cmd   (cmd '())
                           #:tcp   (tcp #f)
