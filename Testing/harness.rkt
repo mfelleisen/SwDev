@@ -47,7 +47,7 @@ exec racket -tm "$0" ${1+"$@"}
 
   (make-setup
   #; (PathString [Listof String] [InputPort OutputPort -> (values InputPort OutputPort)] -> Setup)
-  #;(define (x stdout stdin) (if tcp (try-to-connect-to-times RETRY-COUNT tcp) (values stdout stdin)))
+  #; (define (x stdout stdin) (if tcp (try-to-connect-to-times RETRYCOUNT tcp) (values stdout stdin)))
   #; (make-setup "./xfoo" (list "10" "45678") x)
   ;; sets up `xfoo`to run as a subprocess (group),
   ;; applies x to the STDOUT and STDIN ports, which are the ports for "us" to read outputs of `xfoo`
@@ -168,9 +168,10 @@ exec racket -tm "$0" ${1+"$@"}
 
 (define ((server #:check valid-json
                  #:cmd   (cmd '())
-                 #:inexact-okay? [p 0.001]
-                 #:tcp   (tcp #false))
-         tests-directory-name program-to-be-tested)
+                 #:tcp   (tcp #false)
+                 #:inexact-okay? [p 0.001])
+         tests-directory-name client-to-be-tested)
+  
   #; {InputPort OutputPort -> (values InputPort OutputPort)}
   ;; deliver two ports on which communication with the client happens 
   (define (connect stdout stdin)
@@ -180,22 +181,25 @@ exec racket -tm "$0" ${1+"$@"}
       [(sync/timeout ACCEPT-TIMEOUT listener) => tcp-accept]
       [else
        (raise-connection-error "failed to accept a connection within ~a seconds" ACCEPT-TIMEOUT)]))
+  
   (json-precision p)
-  (define setup (make-setup program-to-be-tested cmd connect))
-  (work-horse setup program-to-be-tested tests-directory-name valid-json))
+  (define setup (make-setup client-to-be-tested cmd connect))
+  (work-horse setup client-to-be-tested tests-directory-name valid-json))
 
 (define ((client #:check valid-json
                  #:cmd   (cmd '())
-                 #:inexact-okay? [p 0.001]
-                 #:tcp   (tcp #false))
-         tests-directory-name program-to-be-tested)
+                 #:tcp   (tcp #false)
+                 #:inexact-okay? [p 0.001])
+         tests-directory-name server-to-be-tested)
+  
   #; {InputPort OutputPort -> (values InputPort OutputPort)}
   ;; deliver two ports on which communication with the server happens 
   (define (connect stdout stdin)
     (if tcp (try-to-connect-to-times RETRY-COUNT tcp) (values stdout stdin)))
+
   (json-precision p)
-  (define setup (make-setup program-to-be-tested cmd connect))
-  (work-horse setup program-to-be-tested tests-directory-name valid-json))
+  (define setup (make-setup server-to-be-tested cmd connect))
+  (work-horse setup server-to-be-tested tests-directory-name valid-json))
 
 (define ((client/no-tests #:cmd   (cmd '())
                           #:tcp   (tcp #f)
@@ -228,6 +232,7 @@ exec racket -tm "$0" ${1+"$@"}
       (define-values (in out) (f stdout stdin))
       (values in out tear-down)))
   setup)
+
 
 (struct exn:fail:connection exn:fail ())
 (define (raise-connection-error msg . args)
@@ -321,10 +326,10 @@ exec racket -tm "$0" ${1+"$@"}
   (parameterize ()
     (displayln `(testing ,program-to-be-tested))
     
-    (define file*      (json-test-files (in-directory tests-directory-name (lambda (_path) #f))))
-    (define test*      (retrieve-all-tests file*))
-    (define all-tests# (length test*))
-    (define valid-tests  (eliminate-bad-tests valid-json? test*))
+    (define file*       (json-test-files (in-directory tests-directory-name (lambda (_path) #f))))
+    (define test*       (retrieve-all-tests file*))
+    (define all-tests#  (length test*))
+    (define valid-tests (eliminate-bad-tests valid-json? test*))
     
 
     (with-handlers ([exn:fail:connection? (lambda (e)
@@ -349,7 +354,7 @@ exec racket -tm "$0" ${1+"$@"}
 #; (Boolean Boolean Boolean Boolean [-> Setup] [Listof JSexpr]
             ->
             [List [List Symbol Symbol Symbol Symbol] JSexpr])
-;; run a single test in the specified context 
+;; run a single test in the specified context, restart the to-be-tested program
 (define (test-one pretty trickle terminated escaped setup input*)
   (define pretty-sym (if pretty 'pretty 'plain))
   (define trickle-sym (if trickle 'slow 'fast))
