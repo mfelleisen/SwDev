@@ -105,7 +105,7 @@
 (define NO-REACTION         "Timed out waiting for reading to start.")
 (define RESPONSE-INCOMPLETE "Timed out waiting for reading to complete.")
 
-(define TIMEOUT 10) ;; seconds. See read-json-safely/timeout.
+(define TIMEOUT 10) ;; seconds. See read-json/timeout.
 (define io-time-out (make-parameter TIMEOUT))
 
 (define (unset-time-out #:limit (limit 1000))

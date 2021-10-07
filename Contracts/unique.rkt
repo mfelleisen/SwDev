@@ -2,8 +2,9 @@
 
 (provide
  (rename-out
-  #; {Collection -> Boolean}
-  [unique/c-square unique/c]))
+   #; {Collection -> Boolean}
+  [unique/c-set distinct?]
+  [unique/c-set unique/c]))
 
 (define (unique/c-set coll-of-x)
   (define list-of-x (for/list ([x coll-of-x]) x))
