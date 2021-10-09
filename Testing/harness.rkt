@@ -56,7 +56,7 @@ exec racket -tm "$0" ${1+"$@"}
  
  (contract-out
 
-  (make-setup
+  (make-setup ;; I exported this for ~/Course/20SwDev/
    #; (PathString [Listof String] [InputPort OutputPort -> (values InputPort OutputPort)] -> Setup)
    #; (define (x stdout stdin) (if tcp (try-to-connect-times RETRYCOUNT tcp) (values stdout stdin)))
    #; (make-setup "./xfoo" (list "10" "45678") x)
