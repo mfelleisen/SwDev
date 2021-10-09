@@ -43,20 +43,31 @@ exec racket -tm "$0" ${1+"$@"}
  test-with-batch-mode?
  test-the-first-n-at-most                 ;; how many of the tests will be used, maximally
  
+ #; {#:check (JSexpr -> Boolean) #:cmd [Listof String] #:inexact-okay? Boolean ->
+     [PathString PathString PathString -> Void]}
+ #; [(client-and-server #:check ck #:cmd cl #:inexact-okay? io)
+     PathToTestDirectory/ PathToClientExec PathToServerExec]
+ ;; runs `PathToClientExec` and `PathToServerExec` with the same command-line content (`cl`);
+ ;; feeds both the same (`ck`-blessed) test-in fles from `PathToTestDirectory/` on STDIN,
+ ;; waits for `PathToServerExec` to output a JSexpr (may need `unset-time-out`), 
+ ;; which it compares to the expected output from the matching test-out file in `PathToTestDirectory`
+ ;; (with the precision for numbers as specified via io)
+ client-and-server
+ 
  (contract-out
 
   (make-setup
-  #; (PathString [Listof String] [InputPort OutputPort -> (values InputPort OutputPort)] -> Setup)
-  #; (define (x stdout stdin) (if tcp (try-to-connect-to-times RETRYCOUNT tcp) (values stdout stdin)))
-  #; (make-setup "./xfoo" (list "10" "45678") x)
-  ;; sets up `xfoo`to run as a subprocess (group),
-  ;; applies x to the STDOUT and STDIN ports, which are the ports for "us" to read outputs of `xfoo`
-  ;;    or feed it inputs
-  ;; creates a thunk for tearing down the process group 
-  (->i ([program-to-be-tested path-string?]
-        [cmd-line-flags       (listof string?)]
-        [align-in-out         (-> input-port? output-port? (values input-port? output-port? ))])
-       (r (-> (values input-port? output-port? (-> any/c))))))
+   #; (PathString [Listof String] [InputPort OutputPort -> (values InputPort OutputPort)] -> Setup)
+   #; (define (x stdout stdin) (if tcp (try-to-connect-times RETRYCOUNT tcp) (values stdout stdin)))
+   #; (make-setup "./xfoo" (list "10" "45678") x)
+   ;; sets up `xfoo`to run as a subprocess (group),
+   ;; applies x to the STDOUT and STDIN ports, which are the ports for "us" to read outputs of `xfoo`
+   ;;    or feed it inputs
+   ;; creates a thunk for tearing down the process group 
+   (->i ([program-to-be-tested path-string?]
+         [cmd-line-flags       (listof string?)]
+         [align-in-out         (-> input-port? output-port? (values input-port? output-port? ))])
+        (r (-> (values input-port? output-port? (-> any/c))))))
 
   [client
    ;; run _to-be-tested_ on tests in _test-directory_
@@ -200,6 +211,27 @@ exec racket -tm "$0" ${1+"$@"}
   (json-precision p)
   (define setup (make-setup server-to-be-tested cmd connect))
   (work-horse setup server-to-be-tested tests-directory-name valid-json))
+
+(define ((client-and-server #:check valid-json
+                            #:cmd   (cmd '())
+                            #:inexact-okay? [p 0.001])
+         tests-directory-name client-to-be-tested server-to-be-tested)
+  (json-precision p)
+  (define server-setup (make-setup server-to-be-tested cmd values))
+  (define client-setup (make-setup client-to-be-tested cmd values))
+
+  ;; combinet the two set-up thunks into one:
+  (define [setup]
+    (define-values (server-in server-out server-tear-down) [server-setup])
+    (define-values (client-in client-out client-tear-down) [client-setup])
+
+    (define in server-in)
+    (define out (combine-output server-out client-out))
+    (define (tear-down) (server-tear-down) (client-tear-down))
+
+    (values in out tear-down))
+
+  (work-horse setup client-to-be-tested tests-directory-name valid-json))
 
 (define ((client/no-tests #:cmd   (cmd '())
                           #:tcp   (tcp #f)
