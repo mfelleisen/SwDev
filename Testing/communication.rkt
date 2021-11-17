@@ -129,7 +129,10 @@
   (define reply-ch    (make-channel))
   (define read-thread (thread (make-reader control-ch reply-ch start-timeout-sec)))
   (retrieve-response control-ch reply-ch response-duration-timeout-sec))
-  
+
+#; {-> [Channel Channel N -> Void]}
+;; EFFECT when the input port is ready, try to read-json & send result on reply-ch
+;; EFFECT tell control thread on control-ch that the reading has (not) started in `start-timeout`
 (define ((make-reader control-ch reply-ch start-timeout-sec))
   (cond
     [(sync/timeout start-timeout-sec (current-input-port))
@@ -138,6 +141,10 @@
        (channel-put reply-ch (list 'ok (read-json))))]
     [else (channel-put control-ch 'response-not-started)]))
 
+#; {-> [Channel Channel N -> (U NO-REACTION ERROR-string RESPONSE-INCOMPLETE JSexpr)]}
+;; retrieve the JSON value after it was read subject to timing constraints 
+;; EFFECT wait for a signal on control channel; 
+;; EFFECT if the signal is 'response-started, enforce time-out for the reading process
 (define (retrieve-response control-ch reply-ch response-duration-timeout-sec)
   (match (channel-get control-ch)
     ['response-not-started NO-REACTION]
