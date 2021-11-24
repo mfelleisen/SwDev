@@ -113,7 +113,7 @@
 
 (define (read-message (iport (current-input-port)))
   (parameterize ((current-input-port iport))
-    (with-handlers ([exn:fail:network? (lambda (_exn) eof)])
+    (with-handlers ([exn:fail:network? (lambda (_exn) (log-error "read-message: fail:network") eof)])
       (read-json/timeout (io-time-out) (io-time-out)))))
 
 ;; Detects values that mean the end of the session with the remote party.
@@ -134,12 +134,24 @@
 ;; EFFECT when the input port is ready, try to read-json & send result on reply-ch
 ;; EFFECT tell control thread on control-ch that the reading has (not) started in `start-timeout`
 (define ((make-reader control-ch reply-ch start-timeout-sec))
+  (when (special) (log-error "waiting for response"))
+  
   (cond
     [(sync/timeout start-timeout-sec (current-input-port))
+
+     (when (special) (log-error "response started"))
+
      (channel-put control-ch 'response-started)
      (with-handlers [(values (lambda (e) (channel-put reply-ch (list 'exn e))))]
        (channel-put reply-ch (list 'ok (read-json))))]
-    [else (channel-put control-ch 'response-not-started)]))
+    [else
+
+     (when (special) (log-error "response ____failed___ to start"))
+
+     (channel-put control-ch 'response-not-started)]))
+
+(define special (make-parameter #false))
+(provide special)
 
 #; {-> [Channel Channel N -> (U NO-REACTION ERROR-string RESPONSE-INCOMPLETE JSexpr)]}
 ;; retrieve the JSON value after it was read subject to timing constraints 

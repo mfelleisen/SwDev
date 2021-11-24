@@ -212,16 +212,17 @@ exec racket -tm "$0" ${1+"$@"}
   (define setup (make-setup server-to-be-tested cmd connect))
   (work-horse setup server-to-be-tested tests-directory-name valid-json))
 
-(define ((client-and-server #:check valid-json
-                            #:cmd   (cmd '())
-                            #:inexact-okay? [p 0.001])
+;; ---------------------------------------------------------------------------------------------------
+(define ((client-and-server #:check valid-json #:inexact-okay? [p 0.001])
          tests-directory-name client-to-be-tested server-to-be-tested)
   (json-precision p)
-  (define server-setup (make-setup server-to-be-tested cmd values))
-  (define client-setup (make-setup client-to-be-tested cmd values))
-
+  
   ;; combinet the two set-up thunks into one:
   (define [setup]
+
+    (define cmd (list (~a (get-starter-port))))
+    (define server-setup (make-setup server-to-be-tested cmd values))
+    (define client-setup (make-setup client-to-be-tested cmd values))
     (define-values (server-in server-out server-tear-down) [server-setup])
     (define-values (client-in client-out client-tear-down) [client-setup])
 
@@ -230,14 +231,23 @@ exec racket -tm "$0" ${1+"$@"}
     (define (tear-down)
       (define client-shut-down (thread (λ () (client-tear-down))))
       (server-tear-down)
-      (log-error "waiing for clients")
-      (sync client-shut-down)
-      (log-error "clients are shut down"))
+      (sync client-shut-down))
 
     (values in out tear-down))
 
   (work-horse setup (~a client-to-be-tested " " server-to-be-tested) tests-directory-name valid-json))
 
+(define BASE 12345)
+(define PORT-STARTER-FILE "port-starter-file.rktd")
+(define (get-starter-port)
+  (define p 
+    (cond
+      [(file-exists? PORT-STARTER-FILE) (with-input-from-file PORT-STARTER-FILE read)]
+      [else BASE]))
+  (with-output-to-file PORT-STARTER-FILE (λ () (writeln (add1 p))) #:exists 'replace)
+  p)
+
+;; ---------------------------------------------------------------------------------------------------
 (define ((client/no-tests #:cmd   (cmd '())
                           #:tcp   (tcp #f)
                           #:stdin (stdin #f))
@@ -246,22 +256,24 @@ exec racket -tm "$0" ${1+"$@"}
   (define setup (make-setup program-to-be-tested cmd x #:stdin stdin))
   (work-horse/no-tests setup program-to-be-tested))
 
+;; ---------------------------------------------------------------------------------------------------
 #; ([PathString [Listof String] InputPort OutputPort -> (values InputPort OutputPort)] -> Setup)
-(define (make-setup program-to-be-tested cmd f #:stdin (config #f))
+(define (make-setup program-to-be-tested args f #:stdin (config #f))
   (define (setup)
     (define custodian (make-custodian))
     (parameterize ((current-custodian custodian)
                    (current-subprocess-custodian-mode 'kill)
                    (subprocess-group-enabled
                     (or (eq? (system-type) 'unix) (eq? (system-type) 'macosx))))
-      (define-values (stdout stdin pid _stderr query) (apply spawn-process program-to-be-tested cmd))
+      
+      
+      (define-values (stdout stdin pid _stderr query) (apply spawn-process program-to-be-tested args))
       (log-error (~a "xtest: " program-to-be-tested " runs as " pid))
 
       (when config
         (with-input-from-file config
           (lambda ()
             (define lines (port->lines))
-            (display-lines lines stdin)
             (flush-output stdin))))
       
       (define (tear-down)
@@ -272,7 +284,15 @@ exec racket -tm "$0" ${1+"$@"}
       (values in out tear-down)))
   setup)
 
+#; (PathString [Any ...] -> Void)
+(define (spawn-process command . args)
+  (apply values (apply process*/ports #f #f (current-error-port) command args)))
 
+;; ProcessId -> Void 
+(define (kill-process query)
+  (query 'kill))
+
+;; ---------------------------------------------------------------------------------------------------
 (struct exn:fail:connection exn:fail ())
 (define (raise-connection-error msg . args)
   (raise (exn:fail:connection (apply format msg args) (current-continuation-marks))))
@@ -289,14 +309,6 @@ exec racket -tm "$0" ${1+"$@"}
          (with-handlers ((exn:fail:network? (lambda (x) (retry (+ 1 count)))))
            (tcp-connect LOCALHOST tcp))])))
   (values in out))
-
-#; (PathString [Any ...] -> Void)
-(define (spawn-process command . args)
-  (apply values (apply process*/ports #f #f (current-error-port) command args)))
-
-;; ProcessId -> Void 
-(define (kill-process query)
-  (query 'kill))
 
 ;                                                                 
 ;                        ;      ;                                 
@@ -410,7 +422,7 @@ exec racket -tm "$0" ${1+"$@"}
       (if (and in out)
           (feed-and-receive in out input*)
           'failed-to-establish-connection)))
-  (log-info " ... ~v" actual)
+  (log-info "received actual ... ~v" actual)
   (tear-down)
   (list classification actual))
 
@@ -459,7 +471,8 @@ exec racket -tm "$0" ${1+"$@"}
 #; [-> [Listof JSexpr]]
 ;; EFFECT keep reading until current output port is closed 
 (define (read-rest)
-  (define next (read-message))
+  (define next (parameterize ([special #true]) (read-message)))
+  (log-error "harness next: ~v" next)
   (match next
     [(? eof-object?) '()]
     [(? terminal-value? v) (list v)]
