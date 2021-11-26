@@ -25,6 +25,7 @@
  ;; failure: exn:fail:network
  (contract-out
   (broken (-> string? any))
+  [broken? (-> any/c boolean?)]
   [connect-to-server-as-receiver
    (->* (string? port/c) (tries/c #:init (-> output-port? any))
         (values (-> (-> (or/c eof-object? jsexpr?) jsexpr?) any)
@@ -44,7 +45,7 @@
     (read-message in))
   (values call-server custodian))
 
-(struct broken [x])
+(struct broken [x] #:transparent)
 #; {type Broken = (broken String)}
 ;; allow connect-to-server-as-receiver to send alternative strings 
 
