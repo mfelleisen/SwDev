@@ -268,7 +268,7 @@ exec racket -tm "$0" ${1+"$@"}
       
       
       (define-values (stdout stdin pid _stderr query) (apply spawn-process program-to-be-tested args))
-      (log-error (~a "xtest: " program-to-be-tested " runs as " pid))
+      (log-info (~a "xtest: " program-to-be-tested " runs as " pid))
 
       (when config
         (with-input-from-file config
@@ -277,7 +277,7 @@ exec racket -tm "$0" ${1+"$@"}
             (flush-output stdin))))
       
       (define (tear-down)
-        (kill-process query)
+        (kill-process pid query)
         (custodian-shutdown-all custodian))
       
       (define-values (in out) (f stdout stdin))
@@ -289,8 +289,9 @@ exec racket -tm "$0" ${1+"$@"}
   (apply values (apply process*/ports #f #f (current-error-port) command args)))
 
 ;; ProcessId -> Void 
-(define (kill-process query)
-  (query 'kill))
+(define (kill-process pid query)
+  (query 'kill)
+  (query 'wait))
 
 ;; ---------------------------------------------------------------------------------------------------
 (struct exn:fail:connection exn:fail ())
@@ -471,8 +472,7 @@ exec racket -tm "$0" ${1+"$@"}
 #; [-> [Listof JSexpr]]
 ;; EFFECT keep reading until current output port is closed 
 (define (read-rest)
-  (define next (parameterize ([special #true]) (read-message)))
-  (log-error "harness next: ~v" next)
+  (define next (read-message))
   (match next
     [(? eof-object?) '()]
     [(? terminal-value? v) (list v)]
