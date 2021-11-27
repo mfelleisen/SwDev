@@ -56,7 +56,7 @@
   (define (receive-from-server f)
     (define input (read-message in))
     (match (f input)
-      [(broken result) (writeln result out) (flush-output out)]
+      [(broken result) (displayln result out) (flush-output out)]
       [result (send-message result out)]))
   (values receive-from-server custodian))
 
