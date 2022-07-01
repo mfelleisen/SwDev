@@ -46,14 +46,33 @@
 ;; ===================================================================================================
 
 (provide
- matrix
+ #; {[Listof X] *-> [Matrix X] || all lists in the argument are the same length}
+ (contract-out
+  [matrix (->* [] #:rest (and/c (listof any/c) (λ (x) (apply = (map length x)))) matrix?)])
+
+ #; {[Matrix X] N N -> X}
+ #; (matrix-ref m row col)
+ matrix-ref
 
  matrix-#rows
  matrix-#columns
 
  matrix-transpose)
 
-(define (matrix x) x)
+;; ---------------------------------------------------------------------------------------------------
+(module+ test
+  (require (submod "..")))
+
+(define (matrix? x)
+  (and (cons? x) (cons? (first x))))
+
+(module+ test
+  (check-equal? (matrix '[1 2 3] '[a b c]) '[[1 2 3] [a b c]]))
+
+(define (matrix-ref rb row column)
+  (list-ref (list-ref rb row) column))
+
+(define (matrix . x) x)
 
 (define (build-matrix f rows# columns#) 0)
 
