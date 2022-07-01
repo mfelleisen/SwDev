@@ -9,7 +9,10 @@
  rdc
 
  #; {[Cons X [Listof X]] -> (values [Listof X] X)}
- split-off-last)
+ split-off-last
+
+ #; {[Listof X] N -> [Listof [Listof X]]}
+ split-list)
 
 ;; ---------------------------------------------------------------------------------------------------
 (module+ test
@@ -37,6 +40,16 @@
              (begin (set! lst (car l)) '())))
        lst)))
 
+#; {[Listof X] N -> [Listof [Listof X]]}
+(define (split-list tiles0 rows#)
+  (let L ([t* tiles0])
+    (cond
+      [(empty? t*) '()]
+      [else
+       (define row1 (take t* rows#))
+       (cons row1 (L (drop t* rows#)))])))
+
+
 ;; ---------------------------------------------------------------------------------------------------
 (module+ test
   (check-equal? (rdc '(a b c)) '(a b))
@@ -46,6 +59,9 @@
 ;; ===================================================================================================
 
 (provide
+
+ matrix?
+
  #; {[Listof X] *-> [Matrix X] || all lists in the argument are the same length}
  (contract-out
   [matrix (->* [] #:rest (and/c (listof any/c) (λ (x) (apply = (map length x)))) matrix?)])
