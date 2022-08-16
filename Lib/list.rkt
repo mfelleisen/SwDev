@@ -8,6 +8,9 @@
  #; {[Cons X ... Y] -> [Listof X]}
  rdc
 
+ #; {[NEListof X] -> [NEListof X]} 
+ list-rotate 
+
  #; {[Cons X [Listof X]] -> (values [Listof X] X)}
  split-off-last
 
@@ -19,6 +22,10 @@
   (require rackunit))
 
 ;; ---------------------------------------------------------------------------------------------------
+#; {[NEListof X] -> [NEListof X]}
+(define (list-rotate lox)
+  (snoc (rest lox) (first lox)))
+  
 (define (snoc l x) (append l (list x)))
 
 (define (rdc l)
@@ -80,7 +87,11 @@
   (require (submod "..")))
 
 (define (matrix? x)
-  (and (cons? x) (cons? (first x))))
+  (and (cons? x)
+       (list? x)
+       (cons? (first x))
+       (andmap list? x) 
+       (apply = (map length x))))
 
 (module+ test
   (check-equal? (matrix '[1 2 3] '[a b c]) '[[1 2 3] [a b c]]))
