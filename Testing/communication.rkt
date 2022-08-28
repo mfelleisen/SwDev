@@ -28,10 +28,12 @@
  TIMEOUT ;; seconds
  ;; (client gets this many sec. to start sending JSON, and this many more to complete the sending)
 
+ ;; the number of s that the test harness is going to wait for a message from the tested program 
  io-time-out
 
  ;; for backwards compatibility 
- #; {#:limit -> Void} 
+ #; {#:limit -> Void}
+ ;; sets `io-time-out` 
  unset-time-out)
 
 ;; ---------------------------------------------------------------------------------------------------
