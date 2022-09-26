@@ -9,7 +9,10 @@
  rdc
 
  #; {[NEListof X] -> [NEListof X]} 
- list-rotate 
+ list-rotate
+
+ list-rotate+
+ list-rotate-
 
  #; {[Cons X [Listof X]] -> (values [Listof X] X)}
  split-off-last
@@ -25,6 +28,11 @@
 #; {[NEListof X] -> [NEListof X]}
 (define (list-rotate lox)
   (snoc (rest lox) (first lox)))
+
+(define list-rotate+ list-rotate)
+
+(define (list-rotate- lox)
+  (cons (last lox) (rdc lox)))
   
 (define (snoc l x) (append l (list x)))
 
@@ -59,6 +67,8 @@
 
 ;; ---------------------------------------------------------------------------------------------------
 (module+ test
+  (check-equal? (list-rotate- '[a b c]) '[c a b])
+  (check-equal? (list-rotate+ '[a b c]  '[b c a]))
   (check-equal? (rdc '(a b c)) '(a b))
   (check-equal? (let-values (([all-but last] (split-off-last '(a b c)))) `(,all-but ,last))
                 '((a b) c)))
