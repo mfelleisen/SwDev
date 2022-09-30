@@ -227,7 +227,7 @@ exec racket -tm "$0" ${1+"$@"}
     (define-values (client-in client-out client-tear-down) [client-setup])
 
     (define in server-in)
-    (define out (combine-output server-out client-out))
+    (define out (new combine-output-port% [server-out server-out] [client-out client-out]))
     (define (tear-down)
       (define client-shut-down (thread (λ () (client-tear-down))))
       (server-tear-down)
@@ -258,7 +258,7 @@ exec racket -tm "$0" ${1+"$@"}
 
 ;; ---------------------------------------------------------------------------------------------------
 #; ([PathString [Listof String] InputPort OutputPort -> (values InputPort OutputPort)] -> Setup)
-(define (make-setup program-to-be-tested args f #:stdin (config #f))
+(define (make-setup test-program args f #:stdin (config #f))
   (define (setup)
     (define custodian (make-custodian))
     (parameterize ((current-custodian custodian)
@@ -266,26 +266,48 @@ exec racket -tm "$0" ${1+"$@"}
                    (subprocess-group-enabled
                     (or (eq? (system-type) 'unix) (eq? (system-type) 'macosx))))
       
-      
-      (define-values (stdout stdin pid _stderr query) (apply spawn-process program-to-be-tested args))
-      (log-info (~a "xtest: " program-to-be-tested " runs as " pid))
+      #;{InputPort OutputPort ProcessId OutputPort (Symbol -> Any)}
+      (define-values (from-program to-program pid _stderr query) (apply spawn test-program args))
+      (log-info (~a "xtest: " test-program " runs as " pid))
 
       (when config
         (with-input-from-file config
           (lambda ()
             (define lines (port->lines))
-            (flush-output stdin))))
+            (flush-output to-program))))
       
       (define (tear-down)
         (kill-process pid query)
         (custodian-shutdown-all custodian))
       
-      (define-values (in out) (f stdout stdin))
+      (define-values (in out) (f (new in-port% [in from-program]) (new out-port% [out to-program])))
       (values in out tear-down)))
   setup)
 
+;; ---------------------------------------------------------------------------------------------------
+(define in-port%
+  (class object% (init-field in)
+    (define/public (read) (read-message in))
+    (define/public (close) (close-input-port in))
+    (super-new)))
+
+(define out-port%
+  (class object% (init-field out)
+    (define/public (message x) (send-message x out))
+    (define/public (close) (close-output-port out))
+    (super-new)))
+
+(define combine-output-port%
+  (class out-port%
+    (init-field #;{[Instance OutPort%]} server-out)
+    (init-field #;{[Instance OutPort%]} client-out)
+    (define sout (get-field out server-out))
+    (define cout (get-field out client-out))
+    (super-new [out (combine-output sout cout)])))
+  
+;; ---------------------------------------------------------------------------------------------------
 #; (PathString [Any ...] -> Void)
-(define (spawn-process command . args)
+(define (spawn command . args)
   (apply values (apply process*/ports #f #f (current-error-port) command args)))
 
 ;; ProcessId -> Void 
@@ -349,10 +371,8 @@ exec racket -tm "$0" ${1+"$@"}
     (parameterize ((pretty-print-output? pretty)
                    (trickle-output?      trickle)
                    (trailing-newline?    terminated)
-                   (encode-all-unicode?  escaped)
-                   (current-input-port   in)
-                   (current-output-port  out))
-      (read-rest)))
+                   (encode-all-unicode?  escaped))
+      (read-rest in)))
   (tear-down)
   (log-info "received ~v" actual)
   (list (length actual) classification))
@@ -444,39 +464,38 @@ exec racket -tm "$0" ${1+"$@"}
 #; (InputPort OutputPort [Listof JSexpr] -> [Listof JSexpr])
 (define (feed-and-receive in out input*)
   (define batch? (test-with-batch-mode?))
-  (parameterize ((current-input-port in)
-                 (current-output-port out))
-    (write-and-read batch? input*)))
+  (parameterize ()
+    (write-and-read batch? input* in out)))
 
 #; {[Listof JSexpr] -> [Listof JSexpr]}
 ;; EFFECT
 ;;  (1) send all inputs to the input port
 ;;  (2) if interactive, read response for each input
 ;;  (3) in any case, when all inputs are sent, close port and read all responses 
-(define (write-and-read batch? remaining-inputs)
+(define (write-and-read batch? remaining-inputs in out)
   (match remaining-inputs
     ['()
      ; We're pretty sure the need for this is a bug in Racket's TCP port handling.
      (with-handlers ([exn:fail:network? (lambda (e) (void))])
-       (close-output-port (current-output-port)))
-     (read-rest)]
+       (send out close))
+     (read-rest in)]
     [(cons i rest)
-     (send-message i)
+     (send out message i)
      (if batch?
-         (write-and-read batch? rest)
-         (match (read-message)
+         (write-and-read batch? rest in out)
+         (match (send in read)
            [(? eof-object?) '()]
            [(? terminal-value? v) (list v)]
            [v (cons v (write-and-read rest))]))]))
 
 #; [-> [Listof JSexpr]]
 ;; EFFECT keep reading until current output port is closed 
-(define (read-rest)
-  (define next (read-message))
+(define (read-rest in)
+  (define next (send in read))
   (match next
     [(? eof-object?) '()]
     [(? terminal-value? v) (list v)]
-    [v (cons v (read-rest))]))
+    [v (cons v (read-rest in))]))
 
 ;; ---------------------------------------------------------------------------------------------------
 (define (make-exn-safe test-pred)
