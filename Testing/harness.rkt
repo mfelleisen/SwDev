@@ -43,10 +43,21 @@ exec racket -tm "$0" ${1+"$@"}
  test-with-batch-mode?
  test-the-first-n-at-most                 ;; how many of the tests will be used, maximally
  
- #; {#:check (JSexpr -> Boolean) #:cmd [Listof String] #:inexact-okay? Boolean ->
-     [PathString PathString PathString -> Void]}
- #; [(client-and-server #:check ck #:cmd cl #:inexact-okay? io)
+ #; {#:check (JSexpr -> Boolean)
+     [#:cmd [Listof String]]
+     {#:cross-check    (λ _ #false)}
+     {#:prepare-server ([Listof JSexpr] -> any/c)}
+     {#:prepare-client ([Listof JSexpr] -> any/c)}
+     [#:inexact-okay? Boolean]
+     -> [PathString PathString PathString -> Void]}
+
+
+ #; [(client-and-server #:check ck
+                        #:inexact-okay? io
+                        #:prepare-server second
+                        #:prepare-client first)
      PathToTestDirectory/ PathToClientExec PathToServerExec]
+ 
  ;; runs `PathToClientExec` and `PathToServerExec` with the same command-line content (`cl`);
  ;; feeds both the same (`ck`-blessed) test-in fles from `PathToTestDirectory/` on STDIN,
  ;; waits for `PathToServerExec` to output a JSexpr (may need `unset-time-out`), 
@@ -115,6 +126,7 @@ exec racket -tm "$0" ${1+"$@"}
 ;                 ;                                                                    
 
 (require SwDev/Testing/communication)
+(require SwDev/Testing/port-objects)
 (require SwDev/Testing/tcp)
 (require SwDev/Lib/json-equal)
 (require json)
@@ -189,7 +201,7 @@ exec racket -tm "$0" ${1+"$@"}
     (define listener (tcp-listen (or tcp REMOTE-PORT) 30 #true))
     (cond
       [(not tcp) (values stdout stdin)]
-      [(sync/timeout ACCEPT-TIMEOUT listener) => tcp-accept]
+      [(sync/timeout ACCEPT-TIMEOUT listener) => (λ (l) (channel2 ports->objects (tcp-accept l)))]
       [else
        (raise-connection-error "failed to accept a connection within ~a seconds" ACCEPT-TIMEOUT)]))
   
@@ -205,8 +217,8 @@ exec racket -tm "$0" ${1+"$@"}
   
   #; {InputPort OutputPort -> (values InputPort OutputPort)}
   ;; deliver two ports on which communication with the server happens 
-  (define (connect stdout stdin)
-    (if tcp (try-to-connect-to-times RETRY-COUNT tcp) (values stdout stdin)))
+  (define (connect from to)
+    (if tcp (channel2 ports->objects (try-to-connect-to-times RETRY-COUNT tcp)) (values from to)))
 
   (json-precision p)
   (define setup (make-setup server-to-be-tested cmd connect))
@@ -216,36 +228,26 @@ exec racket -tm "$0" ${1+"$@"}
 (define ((client-and-server #:check valid-json #:inexact-okay? [p 0.001])
          tests-directory-name client-to-be-tested server-to-be-tested)
   (json-precision p)
-  
-  ;; combinet the two set-up thunks into one:
-  (define [setup]
-
-    (define cmd (list (~a (get-starter-port))))
-    (define server-setup (make-setup server-to-be-tested cmd values))
-    (define client-setup (make-setup client-to-be-tested cmd values))
-    (define-values (server-in server-out server-tear-down) [server-setup])
-    (define-values (client-in client-out client-tear-down) [client-setup])
-
-    (define in server-in)
-    (define out (new combine-output-port% [server-out server-out] [client-out client-out]))
-    (define (tear-down)
-      (define client-shut-down (thread (λ () (client-tear-down))))
-      (server-tear-down)
-      (sync client-shut-down))
-
-    (values in out tear-down))
-
+  (define setup [make-setup-server-client client-to-be-tested server-to-be-tested])
   (work-horse setup (~a client-to-be-tested " " server-to-be-tested) tests-directory-name valid-json))
 
-(define BASE 12345)
-(define PORT-STARTER-FILE "port-starter-file.rktd")
-(define (get-starter-port)
-  (define p 
-    (cond
-      [(file-exists? PORT-STARTER-FILE) (with-input-from-file PORT-STARTER-FILE read)]
-      [else BASE]))
-  (with-output-to-file PORT-STARTER-FILE (λ () (writeln (add1 p))) #:exists 'replace)
-  p)
+;; combinet the two set-up thunks into one:
+(define ([make-setup-server-client client-to-be-tested server-to-be-tested])
+
+  (define cmd (list (~a (get-starter-port))))
+  (define server-setup (make-setup server-to-be-tested cmd values))
+  (define client-setup (make-setup client-to-be-tested cmd values))
+  (define-values (from-server to-server server-tear-down) [server-setup])
+  (define-values (from-client to-client client-tear-down) [client-setup])
+
+  (define in from-server)
+  (define out (combine-output-ports to-server to-client))
+  (define (tear-down)
+    (define client-shut-down (thread (λ () (client-tear-down))))
+    (server-tear-down)
+    (sync client-shut-down))
+
+  (values in out tear-down))
 
 ;; ---------------------------------------------------------------------------------------------------
 (define ((client/no-tests #:cmd   (cmd '())
@@ -267,8 +269,8 @@ exec racket -tm "$0" ${1+"$@"}
                     (or (eq? (system-type) 'unix) (eq? (system-type) 'macosx))))
       
       #;{InputPort OutputPort ProcessId OutputPort (Symbol -> Any)}
-      (define-values (from-program to-program pid _stderr query) (apply spawn test-program args))
-      (log-info (~a "xtest: " test-program " runs as " pid))
+      (define-values (from0 to0 pid _stderr query) (apply spawn test-program args))
+      (define-values (from-program to-program) (channel2 ports->objects (values from0 to0)))
 
       (when config
         (with-input-from-file config
@@ -280,31 +282,10 @@ exec racket -tm "$0" ${1+"$@"}
         (kill-process pid query)
         (custodian-shutdown-all custodian))
       
-      (define-values (in out) (f (new in-port% [in from-program]) (new out-port% [out to-program])))
+      (define-values (in out) (f from-program to-program))
       (values in out tear-down)))
   setup)
 
-;; ---------------------------------------------------------------------------------------------------
-(define in-port%
-  (class object% (init-field in)
-    (define/public (read) (read-message in))
-    (define/public (close) (close-input-port in))
-    (super-new)))
-
-(define out-port%
-  (class object% (init-field out)
-    (define/public (message x) (send-message x out))
-    (define/public (close) (close-output-port out))
-    (super-new)))
-
-(define combine-output-port%
-  (class out-port%
-    (init-field #;{[Instance OutPort%]} server-out)
-    (init-field #;{[Instance OutPort%]} client-out)
-    (define sout (get-field out server-out))
-    (define cout (get-field out client-out))
-    (super-new [out (combine-output sout cout)])))
-  
 ;; ---------------------------------------------------------------------------------------------------
 #; (PathString [Any ...] -> Void)
 (define (spawn command . args)
@@ -486,7 +467,7 @@ exec racket -tm "$0" ${1+"$@"}
          (match (send in read)
            [(? eof-object?) '()]
            [(? terminal-value? v) (list v)]
-           [v (cons v (write-and-read rest))]))]))
+           [v (cons v (write-and-read batch? rest in out))]))]))
 
 #; [-> [Listof JSexpr]]
 ;; EFFECT keep reading until current output port is closed 
