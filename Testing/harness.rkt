@@ -584,7 +584,7 @@ exec racket -tm "$0" ${1+"$@"}
         [(_ _) #false])))
 
 ;; -----------------------------------------------------------------------------
-;; String -> [Maybe [Listof JSexpr]]
+#; {String -> [Maybe [Listof JSexpr]]}
 ;; read f as JSON file if possible 
 ;; effect: display its name if it is not
 (define (file->json f)
@@ -616,40 +616,37 @@ exec racket -tm "$0" ${1+"$@"}
                 ""
                 "frame condition: no effect for good file")
   
-  (check-equal? (with-output-to-string
-                  (lambda ()
-                    (with-input-from-string "()" (all-json-expressions "nonsense"))))
-                "(nonsense is not a JSON file)\n"
+  (check-equal? (let ([s (open-output-string)])
+                  (parameterize ([current-error-port s])
+                    (with-input-from-string "()" (all-json-expressions "nonsense")))
+                  (get-output-string s))
+                "nonsense contains something other than JSON\n"
                 "write for bad file")
   
-  (void
-   (with-output-to-string
-     (lambda ()
-       (check-equal? (with-input-from-string "()" (all-json-expressions "nonsense"))
-                     #f
-                     "false for bad file"))))
   (check-equal?
-   (eliminate-bad-tests
-    values
-    (list
-     (list "1-in.json"
-           (list "foo")
-           "1-out.json"
-           (with-input-from-string "unquoted string" (all-json-expressions "nonsense")))))
-   '())
-  )
+   (parameterize ([current-error-port (open-output-string)])
+     (with-input-from-string "()" (all-json-expressions "nonsense")))
+   #false
+   "false for bad file")
+
+  (check-equal?
+   (parameterize ([current-error-port (open-output-string)])
+     (eliminate-bad-tests
+      values
+      (list
+       (list "1-in.json"
+             (list "foo")
+             "1-out.json"
+             (with-input-from-string "unquoted string" (all-json-expressions "nonsense"))))))
+   '()))
 
 (define ((all-json-expressions f))
-  (with-handlers ((exn:fail:read?
-                   (lambda (xn)
-                     (displayln `(,f is not a JSON file))
-                     #f)))
-    (let all-json-lines ()
-      (define next (read-message))
-      (cond
-        [(eof-object? next) '()]
-        [(terminal-value? next) (raise (exn:fail:read "error" (current-continuation-marks) '()))]
-        [else (cons next (all-json-lines))]))))
+  (let all-json-lines ([seen-so-far '()])
+    (define next (read-message))
+    (cond
+      [(eof-object? next) (reverse seen-so-far)]
+      [(terminal-value? next) (eprintf "~a contains something other than JSON\n" f) #false]
+      [else (all-json-lines (cons next seen-so-far))])))
 
 ;; -----------------------------------------------------------------------------
 ;; [Listof Path] -> [Listof [List String String]]
