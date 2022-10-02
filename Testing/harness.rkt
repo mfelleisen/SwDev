@@ -1,12 +1,16 @@
 #lang racket
 
-;; support for the three major ways of running tests in Sw Dev 
+;; support for the three major ways of running tests in Sw Dev
+
+;; The names of the JSON testfiles is determined by the following functions: 
 
 (define (recognize-input-filename fn)
   (regexp-match #px"^(.*/)?([^/]+-)?([0-9]+)-in.json$" fn))
 
 (define (matching-output-file-name prefix numberstr)
   (format "~a~a-out.json" (or prefix "") numberstr))
+
+;; Normally, we just use <n>-in.json and <n>-out.json for n = 0, 1, 2, ... 
 
 ;; ---------------------------------------------------------------------------------------------------
 (provide
