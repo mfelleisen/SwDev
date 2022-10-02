@@ -225,14 +225,24 @@ exec racket -tm "$0" ${1+"$@"}
   (work-horse setup server-to-be-tested tests-directory-name valid-json))
 
 ;; ---------------------------------------------------------------------------------------------------
-(define ((client-and-server #:check valid-json #:inexact-okay? [p 0.001])
+(define ((client-and-server #:check valid-json
+                            #:inexact-okay? [p 0.001]
+                            #:prepare-client (pc values)
+                            #:prepare-server (ps values))
          tests-directory-name client-to-be-tested server-to-be-tested)
   (json-precision p)
-  (define setup [make-setup-server-client client-to-be-tested server-to-be-tested])
+  (define setup [make-setup-server-client pc client-to-be-tested ps server-to-be-tested])
   (work-horse setup (~a client-to-be-tested " " server-to-be-tested) tests-directory-name valid-json))
 
-;; combinet the two set-up thunks into one:
-(define ([make-setup-server-client client-to-be-tested server-to-be-tested])
+#;{([Listof JSexpr] -> Any)
+   ProgString
+   ([Listof JSexpr] -> Any)
+   ProgString
+   ->
+   (values [Instanceof InputPort] [Instanceof OutputPort] (-> Void))}
+;; combinet the two set-up thunks into one, with a combined port for feeding both test case inputs
+;; also return a function for tearing down resources 
+(define ([make-setup-server-client pc client-to-be-tested ps server-to-be-tested])
 
   (define cmd (list (~a (get-starter-port))))
   (define server-setup (make-setup server-to-be-tested cmd values))
@@ -241,7 +251,7 @@ exec racket -tm "$0" ${1+"$@"}
   (define-values (from-client to-client client-tear-down) [client-setup])
 
   (define in from-server)
-  (define out (combine-output-ports to-server to-client))
+  (define out (combine-output-ports to-server to-client ps pc))
   (define (tear-down)
     (define client-shut-down (thread (λ () (client-tear-down))))
     (server-tear-down)
@@ -453,21 +463,22 @@ exec racket -tm "$0" ${1+"$@"}
 ;;  (1) send all inputs to the input port
 ;;  (2) if interactive, read response for each input
 ;;  (3) in any case, when all inputs are sent, close port and read all responses 
-(define (write-and-read batch? remaining-inputs in out)
-  (match remaining-inputs
-    ['()
-     ; We're pretty sure the need for this is a bug in Racket's TCP port handling.
-     (with-handlers ([exn:fail:network? (lambda (e) (void))])
-       (send out close))
-     (read-rest in)]
-    [(cons i rest)
-     (send out message i)
-     (if batch?
-         (write-and-read batch? rest in out)
-         (match (send in read)
-           [(? eof-object?) '()]
-           [(? terminal-value? v) (list v)]
-           [v (cons v (write-and-read batch? rest in out))]))]))
+(define (write-and-read batch? remaining-inputs0 in out)
+  (let write-and-read ([remaining-inputs remaining-inputs0])
+    (match remaining-inputs
+      ['()
+       ; We're pretty sure the need for this is a bug in Racket's TCP port handling.
+       (with-handlers ([exn:fail:network? (lambda (e) (void))])
+         (send out close))
+       (read-rest in)]
+      [(cons i rest)
+       (send out message i)
+       (if batch?
+           (write-and-read rest)
+           (match (send in read)
+             [(? eof-object?) '()]
+             [(? terminal-value? v) (list v)]
+             [v (cons v (write-and-read rest))]))])))
 
 #; [-> [Listof JSexpr]]
 ;; EFFECT keep reading until current output port is closed 

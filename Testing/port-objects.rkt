@@ -1,6 +1,6 @@
 #lang racket
 
-;; turn ports into objects to allow for preprocessing of inputs at the `send-message` step
+;; turn ports into objects to allow for conditional processing of inputs at the `send-message` step
 ;; do it for both input and output ports for uniformity
 
 ;; POTENTIAL ISSUE
@@ -18,13 +18,12 @@
    (-> input-port? output-port? (values port-object? port-object?))]
   
   [combine-output-ports
-   (->* (port-object? port-object?)
-        ([-> [listof jsexpr?] any/c] [-> [listof jsexpr?] any/c])
-        port-object?)]))
+   ;; the port counts the messages it is supposed to `send-message`;
+   ;; pass count to the two optional functions 
+   (->* (port-object? port-object?) ([-> natural? any/c] [-> natural? any/c]) port-object?)]))
 
 ;; ---------------------------------------------------------------------------------------------------
 (require SwDev/Testing/communication)
-(require json)
 
 (module+ test
   (require (submod ".."))
@@ -63,11 +62,12 @@
     (init-field #;{[Listof JSexpr] -> [Listof JSexpr]} [for-server identity])
     (init-field #;{[Listof JSexpr] -> [Listof JSexpr]} [for-client identity])
 
+    (define *count 0) 
+
     (define/public (message x)
-      (define j-for-server (for-server x))
-      (define j-for-client (for-client x))
-      (send server-out message j-for-server)
-      (send client-out message j-for-client))
+      (when (for-server *count) (send server-out message x))
+      (when (for-client *count) (send client-out message x))
+      (set! *count (+ *count 1)))
 
     (define/public (close)
       (send server-out close)
@@ -104,8 +104,9 @@
                     [current-error-port s])
        (define out1 (new out-port% [out (current-output-port)]))
        (define out2 (new out-port% [out (current-error-port)]))
-       (define out (combine-output-ports out1 out2 first second))
-       (send out message '[42 21]))
+       (define out (combine-output-ports out1 out2 zero? (λ (i) (= i 1))))
+       (send out message 42)
+       (send out message 21))
      (get-output-string s))
    "42\n21\n"
    "combined port"))
