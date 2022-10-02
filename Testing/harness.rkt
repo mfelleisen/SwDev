@@ -1,17 +1,6 @@
-#! /bin/sh
-#| -*- racket -*-
-exec racket -tm "$0" ${1+"$@"}
-|#
 #lang racket
 
-;; Use as:
-;;    $ xtest PathToTests PathToExecutable 
-;; 
-;; This test harness pipes test input files into an executable either via
-;; STDIN or LOCALHOST TCP and waits for results on STDOUT or LOCALHOST TCP,
-;; respectively. The test directories must contain pairs of files: one for
-;; the input, and one for the expected output. The files are determined by
-;; the following functions: 
+;; support for the three major ways of running tests in Sw Dev 
 
 (define (recognize-input-filename fn)
   (regexp-match #px"^(.*/)?([^/]+-)?([0-9]+)-in.json$" fn))
@@ -19,96 +8,80 @@ exec racket -tm "$0" ${1+"$@"}
 (define (matching-output-file-name prefix numberstr)
   (format "~a~a-out.json" (or prefix "") numberstr))
 
-;; TODO:
-;; -- security for student file acces (shill?)
-
-(define-syntax-rule
-  (make-client-server-contract clause ...)
-  (->i (#:check [valid-json (-> any/c any)])
-       (#:cmd   (command-line-args (listof string?))
-        #:inexact-okay? [ok (or/c #false (and/c real? (</c 1.0) (>/c 0.0)))]
-        #:tcp   (tcp-on (or/c #false (and/c (>/c 1024) (</c 65000)))))
-       (r (->i ([tests-directory path-string?] clause ...) [r any/c]))))
-
+;; ---------------------------------------------------------------------------------------------------
 (provide
- unset-time-out
+ (contract-out
+  [client
+   
+   #; [(client #:check c #:cmd cl #:inexact-okay? t #:tcp p)
+       path-to-test-inputs path-to-client-executable]
+   
+   ;; runs `path-to-client-executable` as a parallel client process with command-line cl 
+   ;; feeding it the JSexprs in every test input file from `path-to-test-inputs` one at a time
+   ;; on TCP port p, if specified, in which case the harness is the server.
 
- file->json
+   ;; The harness compares the actual output of `path-to-client-executable` with the one expected
+   ;; output in <n>-out. The comparison is JSexpr-based not text-based. 
+   ;;
+   ;; If t is #false, JSON numbers must be exactly equal;
+   ;; otherwise they are compare with tolerance t.
+   
+   (->i (#:check [valid-json (-> any/c any)])
+        (#:cmd   (command-line-args (listof string?))
+         #:tcp   (tcp-on (or/c #false (and/c (>/c 1024) (</c 65000))))
+         #:inexact-okay? [ok (or/c #false (and/c real? (</c 1.0) (>/c 0.0)))])
+        (r (->i ([test-directory-path path-string?]
+                 [client-to-be-tested path-string?])
+                [r any/c])))]
+  
+  [server
+   ;; like client, but the given exec plays the role of TCP server if #:tcp PORT comes along
+   ;; and the harness takes on the role of client 
+   (->i (#:check [valid-json (-> any/c any)])
+        (#:cmd   (command-line-args (listof string?))
+         #:tcp   (tcp-on (or/c #false (and/c (>/c 1024) (</c 65000))))
+         #:inexact-okay? [ok (or/c #false (and/c real? (</c 1.0) (>/c 0.0)))])
+        (r (->i ([test-directory-path path-string?]
+                 [server-to-be-tested path-string?])
+                [r any/c])))]
+
+  [client-and-server
+   
+   #; [(client-and-server #:check c #:inexact-okay? t #:prepare-server ps #:prepare-client pc)
+       path-to-test-inputs path-to-client-executable path-to-server-executable]
+        
+   ;; runs `path-to-client-executable` and `path-to-server-executable` as parallel processes
+   ;; feeding each the JSexpr in every test input file from `path-to-test-inputs` one at a time
+   ;; but deciding whether it should be fed into the client or server with (pc i) and (ps i),
+   ;; respectively. The two processes communicate with each other via TCP on an generated port.
+   ;; 
+   ;; The harness compares the actual output from the server with the one expected in <n>-out.
+   ;; The comparison is JSexpr-based not text-based.
+   ;;
+   ;; If t is #false, JSON numbers must be exactly equal;
+   ;; otherwise they are compare with tolerance t.
+   
+   (->i (#:check [valid-json (-> jsexpr? any/c)])
+        (#:inexact-okay? [tolerance (or/c #false (between/c .0 .1))]
+         #:prepare-server [ps (-> natural? boolean?)]
+         #:prepare-client [pc (-> natural? boolean?)])
+        (r (->i ([test-directory-path path-string?]
+                 [client-to-be-tested path-string?]
+                 [server-to-be-tested path-string?])
+                (r any/c))))]
+
+  [unset-time-out
+   ;; sets the time-out limit to `limit` seconds; 1000 is default
+   ;; from "communications.rkt"
+   (->i () (#:limit (limit natural?)) (r any/c))])
 
  ;; [Parameter Boolean]
  test-plain-and-pretty-json?              ;; preset by default 
  test-fast-and-slow-delivery?             ;; the remaining are unset 
  test-with-and-without-trailing-newline? 
  test-with-and-without-escaped-unicode?
- test-with-batch-mode?
  test-the-first-n-at-most                 ;; how many of the tests will be used, maximally
- 
- #; {#:check (JSexpr -> Boolean)
-     [#:cmd [Listof String]]
-     {#:cross-check    (λ _ #false)}
-     {#:prepare-server ([Listof JSexpr] -> any/c)}
-     {#:prepare-client ([Listof JSexpr] -> any/c)}
-     [#:inexact-okay? Boolean]
-     -> [PathString PathString PathString -> Void]}
-
-
- #; [(client-and-server #:check ck
-                        #:inexact-okay? io
-                        #:prepare-server second
-                        #:prepare-client first)
-     PathToTestDirectory/ PathToClientExec PathToServerExec]
- 
- ;; runs `PathToClientExec` and `PathToServerExec` with the same command-line content (`cl`);
- ;; feeds both the same (`ck`-blessed) test-in fles from `PathToTestDirectory/` on STDIN,
- ;; waits for `PathToServerExec` to output a JSexpr (may need `unset-time-out`), 
- ;; which it compares to the expected output from the matching test-out file in `PathToTestDirectory`
- ;; (with the precision for numbers as specified via io)
- client-and-server
- 
- (contract-out
-
-  (make-setup ;; I exported this for ~/Course/20SwDev/
-   #; (PathString [Listof String] [InputPort OutputPort -> (values InputPort OutputPort)] -> Setup)
-   #; (define (x stdout stdin) (if tcp (try-to-connect-times RETRYCOUNT tcp) (values stdout stdin)))
-   #; (make-setup "./xfoo" (list "10" "45678") x)
-   ;; sets up `xfoo`to run as a subprocess (group),
-   ;; applies x to the STDOUT and STDIN ports, which are the ports for "us" to read outputs of `xfoo`
-   ;;    or feed it inputs
-   ;; creates a thunk for tearing down the process group 
-   (->i ([program-to-be-tested path-string?]
-         [cmd-line-flags       (listof string?)]
-         [align-in-out         (-> input-port? output-port? (values input-port? output-port? ))])
-        (r (-> (values input-port? output-port? (-> any/c))))))
-
-  [client
-   ;; run _to-be-tested_ on tests in _test-directory_
-   ;; the directory contains pairs of files:
-   ;; -- recognize-input-file-name ( <n>-in.json for a natural <n> )
-   ;; -- matching-output-file-name ( <n>-out.json for <n>-in.json )
-   ;; see above for the two functions
-   ;; #:tcp   determines the TCP port for LOCALHOST testing, if any
-   ;; #:check can be used to determine the validity of the JSON input
-   ;;         there is also a well-formedness check (but it is diabled)
-   #; (-> [List FileName [Listof JSexpr] FileName [Listof JSexpr]] Boolean)
-   (make-client-server-contract [to-be-tested path-string?])]
-  
-  [server
-   ;; like client, but plays role of TCP server if tcp is #t
-   (make-client-server-contract [to-be-tested path-string?])]
-
-  [client/no-tests
-   ;; run _to-be-tested_ on test inputs from STDIN 
-   ;; #:tcp determines whether the communication uses TCP; STDIN/STDOUT is default 
-   ;; #:check can be used to determine the validity of the JSON input
-   ;;         there is also a well-formedness check (but it is diabled)
-   #; (-> [List FileName [Listof JSexpr] FileName [Listof JSexpr]] Boolean)
-   
-   #; (make-client-server-contract)
-   (->i ()
-        (#:stdin (stdin path-string?)   ;; a file to be re-directed into `to-be-tested`
-         #:cmd   (cmd (listof string?)) ;; command line arguments 
-         #:tcp   (tcp-on (or/c #false (and/c (>/c 1024) (</c 65000)))))
-        (r (->i ([to-be-tested path-string?]) [r any/c])))]))
+ test-with-batch-mode?)
 
 ;                                                                                      
 ;       ;                                  ;                                           
@@ -226,9 +199,9 @@ exec racket -tm "$0" ${1+"$@"}
 
 ;; ---------------------------------------------------------------------------------------------------
 (define ((client-and-server #:check valid-json
-                            #:inexact-okay? [p 0.001]
-                            #:prepare-client (pc values)
-                            #:prepare-server (ps values))
+                            #:inexact-okay?  [p 0.001]
+                            #:prepare-client [pc values]
+                            #:prepare-server [ps values])
          tests-directory-name client-to-be-tested server-to-be-tested)
   (json-precision p)
   (define setup [make-setup-server-client pc client-to-be-tested ps server-to-be-tested])
@@ -260,6 +233,21 @@ exec racket -tm "$0" ${1+"$@"}
   (values in out tear-down))
 
 ;; ---------------------------------------------------------------------------------------------------
+#;
+[client/no-tests
+ ;; run _to-be-tested_ on test inputs from STDIN 
+ ;; #:tcp determines whether the communication uses TCP; STDIN/STDOUT is default 
+ ;; #:check can be used to determine the validity of the JSON input
+ ;;         there is also a well-formedness check (but it is diabled)
+ #; (-> [List FileName [Listof JSexpr] FileName [Listof JSexpr]] Boolean)
+   
+ #; (make-client-server-contract)
+ (->i ()
+      (#:stdin (stdin path-string?)   ;; a file to be re-directed into `to-be-tested`
+       #:cmd   (cmd (listof string?)) ;; command line arguments 
+       #:tcp   (tcp-on (or/c #false (and/c (>/c 1024) (</c 65000)))))
+      (r (->i ([to-be-tested path-string?]) [r any/c])))]
+
 (define ((client/no-tests #:cmd   (cmd '())
                           #:tcp   (tcp #f)
                           #:stdin (stdin #f))
@@ -269,6 +257,20 @@ exec racket -tm "$0" ${1+"$@"}
   (work-horse/no-tests setup program-to-be-tested))
 
 ;; ---------------------------------------------------------------------------------------------------
+#;
+(make-setup ;; I exported this for ~/Course/20SwDev/
+ #; (PathString [Listof String] [InputPort OutputPort -> (values InputPort OutputPort)] -> Setup)
+ #; (define (x stdout stdin) (if tcp (try-to-connect-times RETRYCOUNT tcp) (values stdout stdin)))
+ #; (make-setup "./xfoo" (list "10" "45678") x)
+ ;; sets up `xfoo`to run as a subprocess (group),
+ ;; applies x to the STDOUT and STDIN ports, which are the ports for "us" to read outputs of `xfoo`
+ ;;    or feed it inputs
+ ;; creates a thunk for tearing down the process group 
+ (->i ([program-to-be-tested path-string?]
+       [cmd-line-flags       (listof string?)]
+       [align-in-out         (-> input-port? output-port? (values input-port? output-port? ))])
+      (r (-> (values input-port? output-port? (-> any/c))))))
+
 #; ([PathString [Listof String] InputPort OutputPort -> (values InputPort OutputPort)] -> Setup)
 (define (make-setup test-program args f #:stdin (config #f))
   (define (setup)
