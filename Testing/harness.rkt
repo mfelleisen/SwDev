@@ -10,8 +10,13 @@
 (define (matching-output-file-name prefix numberstr)
   (format "~a~a-out.json" (or prefix "") numberstr))
 
-;; Normally, we just use <n>-in.json and <n>-out.json for n = 0, 1, 2, ... 
+;; Normally, we just use <n>-in.json and <n>-out.json for n = 0, 1, 2, ...
 
+;; TODO:
+;; -- client-server would benefit from functions that look at the _entire_ test input and select it
+;; -- ... would benefit from a #:cmd argument to which the port number is _added_ 
+;; -- doc for #:check after figuring out what it checks
+ 
 ;; ---------------------------------------------------------------------------------------------------
 (provide
  (contract-out
@@ -65,8 +70,8 @@
    ;; If t is #false, JSON numbers must be exactly equal;
    ;; otherwise they are compare with tolerance t.
    
-   (->i (#:check [valid-json (-> jsexpr? any/c)])
-        (#:inexact-okay? [tolerance (or/c #false (between/c .0 .1))]
+   (->i (#:check          [valid-json (-> jsexpr? any/c)])
+        (#:inexact-okay?  [tolerance (or/c #false (between/c .0 .1))]
          #:prepare-server [ps (-> natural? boolean?)]
          #:prepare-client [pc (-> natural? boolean?)])
         (r (->i ([test-directory-path path-string?]
