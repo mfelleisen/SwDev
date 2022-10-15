@@ -7,7 +7,7 @@
  
  #; {[Cons X ... Y] -> [Listof X]}
  rdc
-
+ 
  #; {[NEListof X] -> [NEListof X]} 
  list-rotate
 
@@ -38,7 +38,7 @@
 
 (define (rdc l)
   (if (not (pair? l))
-      (raise-argument-error 'last "(and/c list? (not/c empty?))" l)
+      (raise-argument-error 'rdc "(and/c list? (not/c empty?))" l)
       (let loop ([l l] [x (cdr l)])
         (if (pair? x)
             (cons (car l) (loop x (cdr x)))
