@@ -6,6 +6,7 @@
 ;; exports
 
 (define (same-length? M) (apply = (map length M)))
+(define rectangle? (and/c (listof (listof any/c)) cons? same-length?))
 (define (row/c m) (flat-named-contract "row index" (and/c natural? (</c (matrix-#rows m)))))
 (define (col/c m) (flat-named-contract "column index" (and/c natural? (</c (matrix-#columns m)))))
 
@@ -14,12 +15,14 @@
  direction?
  
  (contract-out
-  [matrix           (->* () #:rest (and/c (listof (listof any/c)) cons? same-length?) matrix?)]
+  [matrix           (->* () #:rest rectangle? matrix?)]
   [matrix-#rows     (-> matrix? natural?)]
   [matrix-#columns  (-> matrix? natural?)]
   [matrix-transpose (-> matrix? matrix?)]
   [matrix-ref       (->i ([m matrix?] [r (m) (row/c m)] [c (m) (col/c m)]) (x any/c))]
   [matrix-set       (->i ([m matrix?] [r (m) (row/c m)] [c (m) (col/c m)] [n any/c]) (y any/c))]
+
+  [matrix-rectangle (-> matrix? (listof (listof any/c)))]
 
   [matrix-slide-row    (->i ([m matrix?] [d left-right/c] [r (m) (row/c m)] [x any/c]) (y matrix?))]
   [matrix-slide-column (->i ([m matrix?] [d up-down/c] [c (m) (col/c m)] [x any/c]) (y matrix?))]  
@@ -28,19 +31,19 @@
   [matrix-right     direction?]
   [matrix-up        direction?]
   [matrix-down      direction?]))
+
+;; occasionally needed for extracted rectangle 
+(provide
+ rectangle?
+ rectangle-#rows
+ rectangle-#columns)
   
 ;; ---------------------------------------------------------------------------------------------------
+(require "list-private.rkt")
+
 (module+ test
   (require (submod ".."))
   (require rackunit))
-
-(define (rdc l)
-  (if (not (pair? l))
-      (raise-argument-error 'last "(and/c list? (not/c empty?))" l)
-      (let loop ([l l] [x (cdr l)])
-        (if (pair? x)
-            (cons (car l) (loop x (cdr x)))
-            '()))))
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; data definition 
@@ -62,7 +65,9 @@
 
 (define (matrix . t-rows)
   (define x (apply (λ x x) t-rows))
-  (inner x #f (length x) (length (first x))))
+  (inner x #f (rectangle-#rows x) (rectangle-#columns x)))
+
+(define matrix-rectangle inner-rectangle)
 
 (define matrix-#rows inner-row#)
 
@@ -120,6 +125,11 @@
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; rectangle auxiliaries
+
+#; {∀ X: [Rectangle X] -> Natural}
+(define (rectangle-#rows x) (length x))
+
+(define (rectangle-#columns x) (length (first x)))
 
 #; {∀ X: [Rectangle X] Direction Natural X RPose -> [Rectangle X]}
 (define (slide R0 direction r nu opt-transpose)
