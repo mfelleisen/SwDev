@@ -24,8 +24,8 @@
 
   [matrix-rectangle (-> matrix? (listof (listof any/c)))]
 
-  [matrix-slide-row    (->i ([m matrix?] [d left-right/c] [r (m) (row/c m)] [x any/c]) (y matrix?))]
-  [matrix-slide-column (->i ([m matrix?] [d up-down/c] [c (m) (col/c m)] [x any/c]) (y matrix?))]  
+  [matrix-slide-row    (->i ([m matrix?] [d left-right/c] [r (m) (row/c m)] [x any/c]) (y matrix+))]
+  [matrix-slide-column (->i ([m matrix?] [d up-down/c] [c (m) (col/c m)] [x any/c]) (y matrix+))]  
 
   [matrix-left      direction?]
   [matrix-right     direction?]
@@ -62,6 +62,8 @@
 ;; basic constructors, predicates, selectors, setter 
 
 (define matrix? inner?)
+
+(define matrix+ (list/c matrix? any/c))
 
 (define (matrix . t-rows)
   (define x (apply (λ x x) t-rows))
@@ -103,13 +105,13 @@
 #; {∀ X: [Matrix X] Direction Natural X -> [Matrix X]}
 #; {type RPose = [Rectangle X] -> [Rectangle X]}
 
-(struct direction [slide add])
+(struct direction [slide out add])
 #; {type Direction = [direction [(Listof X) -> X] [X [Listof X] -> [Listof X]]]}
 
-(define matrix-left  [direction rest (λ (nu row) (reverse (cons nu (reverse row))))])
-(define matrix-right [direction rdc cons])
-(define matrix-up    [direction rest (λ (nu row) (reverse (cons nu (reverse row))))])
-(define matrix-down  [direction rdc cons])
+(define matrix-left  [direction rest first (λ (nu row) (reverse (cons nu (reverse row))))])
+(define matrix-right [direction rdc last cons])
+(define matrix-up    [direction rest first (λ (nu row) (reverse (cons nu (reverse row))))])
+(define matrix-down  [direction rdc last cons])
 
 (define left-right/c
   (flat-named-contract "left-right" (or/c (curry eq? matrix-left) (curry eq? matrix-right))))
@@ -118,10 +120,12 @@
   (flat-named-contract "up-down" (or/c (curry eq? matrix-down) (curry eq? matrix-up))))
 
 (define (matrix-slide-column M d c nu)
-  (inner (slide (inner-rectangle M) d c nu rectangle-transpose) #false (inner-row# M) (inner-col# M)))
+  (match-define [list R out] (slide (inner-rectangle M) d c nu rectangle-transpose))
+  (list (inner R #false (inner-row# M) (inner-col# M)) out))
 
 (define (matrix-slide-row M d r nu)
-  (inner (slide (inner-rectangle M) d r nu identity) #false (inner-row# M) (inner-col# M)))
+  (match-define [list R out] (slide (inner-rectangle M) d r nu identity))
+  (list (inner R #false (inner-row# M) (inner-col# M)) out))
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; rectangle auxiliaries
@@ -134,8 +138,9 @@
 #; {∀ X: [Rectangle X] Direction Natural X RPose -> [Rectangle X]}
 (define (slide R0 direction r nu opt-transpose)
   (let* ([R (opt-transpose R0)]
-         [S ([direction-add direction] nu [(direction-slide direction) (list-ref R r)])])
-    (rectangle-replace-row R r S opt-transpose)))
+         [row (list-ref R r)]
+         [S ([direction-add direction] nu [(direction-slide direction) row])])
+    (list (rectangle-replace-row R r S opt-transpose) [(direction-out direction) row])))
 
 #; {∀ X: [Rectangle X] Natural X Natural Natural Rpose-> [Rectangle X]}
 (define (rectangle-replace-row R r nu opt-transpose)
@@ -160,14 +165,18 @@
      '[B X F]))
 
   (define M1-slide-row1-left-X
-    (matrix
-     '[A C E]
-     '[D F X]))
+    (list
+     (matrix
+      '[A C E]
+      '[D F X])
+     'B))
   
   (define M1-slide-column2-up-X
-    (matrix
-     '[A C F]
-     '[B D X]))
+    (list
+     (matrix
+      '[A C F]
+      '[B D X])
+     'E))
     
   (define M1-transposed
     (matrix
@@ -184,9 +193,9 @@
   (check-equal? (matrix-set M1 1 1 'X) M1-set-1-1-X "set")
 
   (check-equal? (matrix-slide-row M1 matrix-left 1 'X) M1-slide-row1-left-X "slide 1 left X")
-  (check-equal? (matrix-slide-row M1-slide-row1-left-X matrix-right 1 'B) M1 "slide 1 right back")
+  (check-equal? (matrix-slide-row (first M1-slide-row1-left-X) matrix-right 1 'B) [list M1 'X] "1b")
   (check-equal? (matrix-slide-column M1 matrix-up 2 'X) M1-slide-column2-up-X "slide 2 up X")
-  (check-equal? (matrix-slide-column M1-slide-column2-up-X matrix-down 2 'E) M1 "slide 2 down back")
+  (check-equal? (matrix-slide-column (first M1-slide-column2-up-X) matrix-down 2 'E) [list M1 'X] "2")
   
   (check-equal? (matrix-transpose M1) M1-transposed "transpose basic")
   (check-equal? (matrix-transpose (matrix-transpose M1)) M1 "transpose o transpose"))
@@ -208,4 +217,3 @@
 
   (check-exn #px"up-down" (λ () (matrix-slide-column M1 matrix-left 0 'x)))
   (check-exn #px"column index" (λ () (matrix-slide-column M1 matrix-up 9 'x))))
-  
