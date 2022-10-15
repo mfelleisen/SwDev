@@ -68,7 +68,7 @@
 ;; ---------------------------------------------------------------------------------------------------
 (module+ test
   (check-equal? (list-rotate- '[a b c]) '[c a b])
-  (check-equal? (list-rotate+ '[a b c]  '[b c a]))
+  (check-equal? (list-rotate+ '[a b c])  '[b c a])
   (check-equal? (rdc '(a b c)) '(a b))
   (check-equal? (let-values (([all-but last] (split-off-last '(a b c)))) `(,all-but ,last))
                 '((a b) c)))
@@ -130,3 +130,4 @@
   (check-equal? (matrix-transpose silly-board-2) silly-board-2-transposed)
   (check-equal? (matrix-transpose (matrix-transpose silly-board-2)) silly-board-2))
 (define (matrix-transpose rb) (apply map list rb))
+
