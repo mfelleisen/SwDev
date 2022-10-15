@@ -16,6 +16,8 @@
  
  (contract-out
   [matrix           (->* () #:rest rectangle? matrix?)]
+  [make-matrix      (-> rectangle? matrix?)]
+  
   [matrix-#rows     (-> matrix? natural?)]
   [matrix-#columns  (-> matrix? natural?)]
   [matrix-transpose (-> matrix? matrix?)]
@@ -64,6 +66,9 @@
 (define matrix? inner?)
 
 (define matrix+ (list/c matrix? any/c))
+
+(define (make-matrix t-rows)
+  (apply matrix t-rows))
 
 (define (matrix . t-rows)
   (define x (apply (λ x x) t-rows))
@@ -159,6 +164,11 @@
      '[A C E]
      '[B D F]))
 
+  (define M1-make
+    (make-matrix
+     '[[A C E]
+       [B D F]]))
+
   (define M1-set-1-1-X
     (matrix
      '[A C E]
@@ -183,6 +193,8 @@
      '[A B]
      '[C D]
      '[E F]))
+
+  (check-equal? M1 M1-make "make")
   
   (check-equal? (matrix-#rows M1) 2  "#rows")
   (check-equal? (matrix-#columns M1) 3 "#columns")
