@@ -25,6 +25,16 @@
   [matrix-set       (->i ([m matrix?] [r (m) (row/c m)] [c (m) (col/c m)] [n any/c]) (y any/c))]
 
   [matrix-rectangle (-> matrix? (listof (listof any/c)))]
+  
+  [matrix-pad
+   (->i ([m matrix?] [lox [listof any/c]] #:nuwidth (nuw natural?) #:nuheight (nuh natural?))
+        #:pre/name (m nuw) "new width >= to old width expected" (>= nuw (matrix-#columns m))
+        #:pre/name (m nuh) "new height >= to old height expected" (>= nuh (matrix-#rows m))
+        #:pre/name (m nuh nuw lox) "sufficient number of extras expected"
+        (>= (length lox) (* (- (matrix-#columns m) nuw) (- (matrix-#rows m) nuh)))
+        (r matrix?)
+        #:post/name (nuw r) "expected width" (= (matrix-#columns r) nuw)
+        #:post/name (nuh r) "expected height" (= (matrix-#rows r) nuh))]
 
   [matrix-slide-row    (->i ([m matrix?] [d left-right/c] [r (m) (row/c m)] [x any/c]) (y matrix+))]
   [matrix-slide-column (->i ([m matrix?] [d up-down/c] [c (m) (col/c m)] [x any/c]) (y matrix+))]  
@@ -131,6 +141,34 @@
 (define (matrix-slide-row M d r nu)
   (match-define [list R out] (slide (inner-rectangle M) d r nu identity))
   (list (inner R #false (inner-row# M) (inner-col# M)) out))
+
+;; ---------------------------------------------------------------------------------------------------
+;; padding a matrix 
+(define (matrix-pad M extras #:nuwidth (nuw 7) #:nuheight (nuh 7))
+  (make-matrix (rectangle-col-fill (matrix-rectangle M) extras nuw nuh)))
+
+;; ---------------------------------------------------------------------------------------------------
+;; padding a rectangle 
+#; {∀ X: [Rectable X] [Listof X] N N -> [Rectangle X]}
+(define (rectangle-col-fill R extras nuw nuh)
+  (let rectangle-col-fill ([R R] [extras extras] [result '()])
+    (cond
+      [(empty? R) (rectangle-row-fill (reverse result) extras nuw nuh)]
+      [else
+       (define row (first R))
+       (define nnn (- nuw (length row)))
+       (define pad (append row (take extras nnn)))
+       (rectangle-col-fill (rest R) (drop extras nnn) (cons pad result))])))
+
+#; {∀ X: [Rectable X] [Listof X] N N -> [Rectangle X]}
+(define (rectangle-row-fill R extras nuw nuh)
+  (define height (length R))
+  (let rectangle-row-fill ([todo (- nuh height)] [extras extras] [result (reverse R)])
+    (cond
+      [(or (zero? todo) (empty? extras)) (reverse result)]
+      [else
+       (define next-row (take extras nuw))
+       (rectangle-row-fill (sub1 todo) (drop extras nuw) (cons next-row result))])))
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; rectangle auxiliaries
