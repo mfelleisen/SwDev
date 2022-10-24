@@ -135,8 +135,8 @@
   (flat-named-contract "up-down" (or/c (curry eq? matrix-down) (curry eq? matrix-up))))
 
 (define (matrix-slide-column M d c nu)
-  (match-define [list R out] (slide (inner-rectangle M) d c nu rectangle-transpose))
-  (list (inner R #false (inner-row# M) (inner-col# M)) out))
+  (match-define [list M*t out] (matrix-slide-row (matrix-transpose M) d c nu))
+  (list (matrix-transpose M*t) out))
 
 (define (matrix-slide-row M d r nu)
   (match-define [list R out] (slide (inner-rectangle M) d r nu identity))
@@ -249,6 +249,12 @@
   
   (check-equal? (matrix-transpose M1) M1-transposed "transpose basic")
   (check-equal? (matrix-transpose (matrix-transpose M1)) M1 "transpose o transpose"))
+
+(module+ test
+  (define R1 (make-matrix (build-list 11 (λ (row) (build-list 11 (λ (col) [list row col]))))))
+
+  (time (for ([i 100090]) (matrix-slide-column R1 matrix-down 1 'anyany))))
+
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; negative tests
