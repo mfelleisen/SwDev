@@ -9,7 +9,6 @@
 (define rectangle? (and/c (listof (listof any/c)) cons? same-length?))
 (define (row/c m) (flat-named-contract "row index" (and/c natural? (</c (matrix-#rows m)))))
 (define (col/c m) (flat-named-contract "column index" (and/c natural? (</c (matrix-#columns m)))))
-(define matrix+ (list/c matrix? any/c))
 
 (provide
  matrix?
@@ -75,6 +74,7 @@
 ;; basic constructors, predicates, selectors, setter 
 
 (define matrix? inner?)
+(define matrix+ (list/c matrix? any/c))
 
 (define (make-matrix t-rows)
   (apply matrix t-rows))
