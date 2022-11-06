@@ -97,6 +97,8 @@
   (define x (list-set (list-ref R r) c x0))
   (inner (rectangle-replace-row R r x identity) #false (inner-row# M) (inner-col# M)))
 
+(define (matrix-undo M) M)
+
 ;; ---------------------------------------------------------------------------------------------------
 ;; transpose 
 
@@ -196,6 +198,12 @@
 ;; positive tests 
 
 (module+ test
+  (define M1-at-3-x-4
+    (matrix
+     '[A C E a]
+     '[B D F b]
+     '[c d e f]))
+
   (define M1
     (matrix
      '[A C E]
@@ -247,12 +255,14 @@
   (check-equal? (matrix-slide-column (first M1-slide-column2-up-X) matrix-down 2 'E) [list M1 'X] "2")
   
   (check-equal? (matrix-transpose M1) M1-transposed "transpose basic")
-  (check-equal? (matrix-transpose (matrix-transpose M1)) M1 "transpose o transpose"))
+  (check-equal? (matrix-transpose (matrix-transpose M1)) M1 "transpose o transpose")
+
+  (check-equal? (matrix-pad M1 '[a b c d e f] #:nuwidth 4 #:nuheight 3) M1-at-3-x-4 "padding")) 
 
 (module+ test
   (define R1 (make-matrix (build-list 11 (λ (row) (build-list 11 (λ (col) [list row col]))))))
 
-  (time (for ([i 100090]) (matrix-slide-column R1 matrix-down 1 'anyany))))
+  (time (for ([i 100090]) (matrix-slide-column R1 matrix-down 1 'anyany) (matrix-undo R1) (void))))
 
 
 ;; ---------------------------------------------------------------------------------------------------
