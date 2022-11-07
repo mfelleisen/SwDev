@@ -9,17 +9,23 @@
  matrix?
  direction?
  
+ rectangle?
+ rectangle-#rows
+ rectangle-#columns
+ 
  (contract-out
   [matrix           (->* () #:rest rectangle? matrix?)]
- 
   [make-matrix      (-> rectangle? matrix?)]
+
+  [matrix-undo      (-> matrix? any)]
+  [matrix-copy      (-> matrix? matrix?)]
   
   [matrix-#rows     (-> matrix? natural?)]
   [matrix-#columns  (-> matrix? natural?)]
   [matrix-transpose (-> matrix? matrix?)]
   [matrix-ref       (->i ([m matrix?] [r (m) (row/c m)] [c (m) (col/c m)]) (x any/c))]
   [matrix-set       (->i ([m matrix?] [r (m) (row/c m)] [c (m) (col/c m)] [n any/c]) (y any/c))]
-
+  
   [matrix-rectangle (-> matrix? (listof (listof any/c)))]
   
   [matrix-pad
@@ -83,10 +89,28 @@
 
 (define matrix-#columns inner-col#)
 
-(define (matrix-rectangle M)
-  (define R (inner-rectangle M))
-  (for/list ([r R]) (vector->list r)))
+(define (matrix-undo M)
+  (define U (inner-undo M))
+  (when U [U]))
 
+(define (matrix-ref M r c)
+  (vector-ref (vector-ref (inner-rectangle M) r) c))
+
+(define (matrix-set M r c x)
+  (define R (inner-rectangle M))
+  (define y (vector-ref (vector-ref R r) c))
+  (vector-set! (vector-ref R r) c x)
+  (set-inner-undo! M (λ () (matrix-set M r c y)))
+  M)
+
+(define (matrix-ref- M r c) (matrix-ref M c r))
+
+(define (matrix-set- M r c x) (matrix-set M c r x))
+
+#; {∀ X: [Rectangle X] -> Natural}
+(define (rectangle-#rows x) (length x))
+
+(define (rectangle-#columns x) (length (first x)))
 
 ;                                                                                  
 ;                                                                                  
@@ -108,10 +132,10 @@
 
 (struct direction [gen] #:property prop:procedure 0)
 
-(define matrix-left  (direction (λ (width) (values width (curry - width) 0 width matrix-right))))
-(define matrix-right (direction (λ (width) (values 0     identity        width 0 matrix-left))))
-(define matrix-up    [direction (λ (height) (values height (curry - height) 0 height matrix-down))])
-(define matrix-down  [direction (λ (height) (values 0      identity         height 0 matrix-up))])
+(define matrix-left  (direction (λ (w) (values w (curry - w) 0 w matrix-right))))
+(define matrix-right (direction (λ (w) (values 0 identity    w 0 matrix-left))))
+(define matrix-up    [direction (λ (h) (values h (curry - h) 0 h matrix-down))])
+(define matrix-down  [direction (λ (h) (values 0 identity    h 0 matrix-up))])
 
 #; {type Direction = [direction [(Listof X) -> X] [X [Listof X] -> [Listof X]]]}
 
@@ -121,6 +145,15 @@
 (define up-down/c
   (flat-named-contract "up-down" (or/c (curry eq? matrix-down) (curry eq? matrix-up))))
 
+;; ---------------------------------------------------------------------------------------------------
+;; recover the given list-based rectangle
+(define (matrix-rectangle M)
+  (define R (inner-rectangle M))
+  (for/list ([r R]) (vector->list r)))
+
+;; ---------------------------------------------------------------------------------------------------
+;; create the transpose of a matrix 
+
 (define (matrix-transpose M)
   (match-define [inner R _ r c] M)
   (define R^T
@@ -129,31 +162,22 @@
         (vector-ref (vector-ref R r) c))))
   (inner R^T #false c r))
 
-(define (matrix-ref M r c)
-  (vector-ref (vector-ref (inner-rectangle M) r) c))
-
-(define (matrix-set M r c x)
-  (define R (inner-rectangle M))
-  (define y (vector-ref (vector-ref R r) c))
-  (vector-set! (vector-ref R r) c x)
-  (set-inner-undo! M (λ () (matrix-set M r c y)))
-  M)
-
-(define (matrix-undo M)
-  (define U (inner-undo M))
-  (when U [U]))
-
-(define (matrix-ref- M r c) (matrix-ref M c r))
-(define (matrix-set- M r c x) (matrix-set M c r x))
+(define (matrix-copy M)
+  (match-define [inner R _ r c] M)
+  (define C
+    (for/vector ([r (in-range 0 r)])
+      (for/vector ([c (in-range 0 c)])
+        (vector-ref (vector-ref R r) c))))
+  (inner C #false r c))
 
 ;; ---------------------------------------------------------------------------------------------------
-;; padding a matrix 
+;; pad a matrix
+
 (define (matrix-pad M extras #:nuwidth (nuw 7) #:nuheight (nuh 7))
   (make-matrix (rectangle-col-fill (matrix-rectangle M) extras nuw nuh)))
 
-;; ---------------------------------------------------------------------------------------------------
-;; padding a rectangle 
 #; {∀ X: [Rectable X] [Listof X] N N -> [Rectangle X]}
+;; padding a rectangle
 (define (rectangle-col-fill R extras nuw nuh)
   (let rectangle-col-fill ([R R] [extras extras] [result '()])
     (cond
@@ -174,13 +198,14 @@
        (define next-row (take extras nuw))
        (rectangle-row-fill (sub1 todo) (drop extras nuw) (cons next-row result))])))
 
-
 ;; ---------------------------------------------------------------------------------------------------
-#; {type Operate = {{Matrix X} Directon N X -> {Matrix X}}}
-#; {[[Matrix X] N N -> Any] [[Matrix X] N N X -> Matrix] [[X Matrix] -> N] -> Operate}
+;; sliding a row or column 
+
+#; {type ∀X: [Operate X] = {{Matrix X} Directon N X -> {Matrix X}}}
+#; {∀X: [[Matrix X] N N -> Any] [[Matrix X] N N X -> Matrix] [[X Matrix] -> N] -> [Operate X]}
 [define (make-workhorse ref set inner-dim)
 
-  #; Operate 
+  #; [Operate X] 
   ;; EFFECT set undo to the opposite action 
   (define (workhorse M dir n X)
     (define-values (Y opp) (shift M dir n X))
@@ -202,6 +227,7 @@
   workhorse]
 
 (define matrix-slide-column (make-workhorse matrix-ref- matrix-set- inner-row#))
+
 (define matrix-slide-row (make-workhorse matrix-ref matrix-set inner-col#))
 
 ;                                     
@@ -274,6 +300,8 @@
      '[E F]))
 
   (check-equal? M1 M0 "R ->")
+
+  (check-equal? (matrix-copy M1) M1 "copy")
 
   (check-equal? (matrix-rectangle M0) R "<-")
 

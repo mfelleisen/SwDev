@@ -13,10 +13,12 @@
 (provide
  matrix?
  direction?
+ matrix-undo
  
  (contract-out
   [matrix           (->* () #:rest rectangle? matrix?)]
   [make-matrix      (-> rectangle? matrix?)]
+  [matrix-copy      (-> matrix? matrix?)]
   
   [matrix-#rows     (-> matrix? natural?)]
   [matrix-#columns  (-> matrix? natural?)]
@@ -75,6 +77,8 @@
 
 (define matrix? inner?)
 (define matrix+ (list/c matrix? any/c))
+
+(define (matrix-copy m) m)
 
 (define (make-matrix t-rows)
   (apply matrix t-rows))
