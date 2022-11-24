@@ -28,7 +28,7 @@
   [broken? (-> any/c boolean?)]
   [connect-to-server-as-receiver
    (->* (string? port/c) (tries/c #:init (-> output-port? any))
-        (values (-> (-> (or/c eof-object? jsexpr?) jsexpr?) any)
+        (values (-> (-> (or/c eof-object? jsexpr?) (or/c jsexpr? broken?)) any)
                 custodian?))]))
 
 ;; ---------------------------------------------------------------------------------------------------
