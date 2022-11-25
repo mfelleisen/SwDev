@@ -57,7 +57,8 @@
     (define input (read-message in))
     (match (f input)
       [(broken result) (displayln result out) (flush-output out)]
-      [result (send-message result out)]))
+      [(? jsexpr? result) (send-message result out)]
+      [else (log-error "not (broken) JSON, shutting down") (custodian-shutdown-all custodian)]))
   (values receive-from-server custodian))
 
 #; {IP-Address Port N -> (values Custodian Input-Port Output-Port)}
