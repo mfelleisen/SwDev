@@ -155,6 +155,9 @@
 
 (define json-precision (make-parameter #false))
 
+(define ACCEPT-TIMEOUT 5)    ;; seconds. See (server).
+(define RETRY-COUNT    10)   ;; with a retry every .5 sec. See (client).
+
 
 ;                                                                                                    
 ;                                                                                                    
@@ -180,7 +183,7 @@
   #; {InputPort OutputPort -> (values InputPort OutputPort)}
   ;; deliver two ports on which communication with the client happens 
   (define (connect stdout stdin)
-    (define listener (tcp-listen (or tcp REMOTE-PORT) 30 #true))
+    (define listener (tcp-listen (or tcp REMOTE-PORT0) 30 #true))
     (cond
       [(not tcp) (values stdout stdin)]
       [(sync/timeout ACCEPT-TIMEOUT listener) => (λ (l) (channel2 ports->objects (tcp-accept l)))]
