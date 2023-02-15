@@ -5,10 +5,13 @@
 ;; ---------------------------------------------------------------------------------------------------
 ;; exports
 
+(define (square? l) (and/c cons? (natural? (sqrt (length l)))))
 (define (same-length? M) (apply = (map length M)))
 (define rectangle? (and/c (listof (listof any/c)) cons? same-length?))
 (define (row/c m) (flat-named-contract "row index" (and/c natural? (</c (matrix-#rows m)))))
 (define (col/c m) (flat-named-contract "column index" (and/c natural? (</c (matrix-#columns m)))))
+
+(define [(divisible-by n) l] (= (remainder (length l) n) 0))
 
 (provide
  matrix?
@@ -16,12 +19,20 @@
  matrix-undo
  
  (contract-out
+  [group-by-length (->i ([l (n) (and/c list? (divisible-by n))] [n natural?]) [r (listof list?)])])
+ 
+ (contract-out
   [matrix           (->* () #:rest rectangle? matrix?)]
   [make-matrix      (-> rectangle? matrix?)]
+  [matrix-from-list (-> (and/c (listof any/c) square?) matrix?)]
   [matrix-copy      (-> matrix? matrix?)]
   
   [matrix-#rows     (-> matrix? natural?)]
   [matrix-#columns  (-> matrix? natural?)]
+  [matrix-diagonal  (-> matrix? list?)]
+  [matrix-rows      (-> matrix? list?)]
+  [matrix-columns   (-> matrix? list?)]
+
   [matrix-transpose (-> matrix? matrix?)]
   [matrix-ref       (->i ([m matrix?] [r (m) (row/c m)] [c (m) (col/c m)]) (x any/c))]
   [matrix-set       (->i ([m matrix?] [r (m) (row/c m)] [c (m) (col/c m)] [n any/c]) (y any/c))]
@@ -78,10 +89,30 @@
 (define matrix? inner?)
 (define matrix+ (list/c matrix? any/c))
 
+;; ===================================================================================================
+(define (group-by-length l n)
+  (let loop ([l l])
+    (cond
+      [(empty? l) '()]
+      [else (cons (take l n) (loop (drop l n)))])))
+;; ===================================================================================================
+
 (define (matrix-copy m) m)
 
 (define (make-matrix t-rows)
   (apply matrix t-rows))
+
+;; make a square matrix from a list of objects 
+(module+ test
+  (check-equal? (matrix-from-list '[1 2 3 4 5 6 7 8 9]) (matrix '[1 2 3] '[4 5 6] '[7 8 9])))
+(define (matrix-from-list l)
+  (define n (sqrt (length l)))
+  (define r 
+    (let loop ([l l])
+      (cond
+        [(empty? l) '()]
+        [else (cons (take l n) (loop (drop l n)))])))
+  (apply matrix r))
 
 (define (matrix . t-rows)
   (define x (apply (λ x x) t-rows))
@@ -92,6 +123,16 @@
 (define matrix-#rows inner-row#)
 
 (define matrix-#columns inner-col#)
+
+;; for iterating over matrix elements 
+(module+ test
+  (check-equal? (matrix-diagonal (matrix '[1 2 3] '[4 5 6] '[7 8 9])) '[1 5 9]))
+(define (matrix-diagonal m)
+  (for/list ([i (matrix-#rows m)]) (matrix-ref m i i)))
+
+(define (matrix-rows m) (matrix-rectangle m))
+
+(define (matrix-columns m) (matrix-rectangle (matrix-transpose m)))
 
 (define (matrix-ref M r c)
   (list-ref (list-ref (inner-rectangle M) r) c))
