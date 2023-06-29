@@ -35,6 +35,7 @@
 
   [matrix-transpose (-> matrix? matrix?)]
   [matrix-ref       (->i ([m matrix?] [r (m) (row/c m)] [c (m) (col/c m)]) (x any/c))]
+  [matrix-ref*      (->i ([m matrix?] [r integer?] [c integer?]) (#:default (d any/c)) (y any/c))]
   [matrix-set       (->i ([m matrix?] [r (m) (row/c m)] [c (m) (col/c m)] [n any/c]) (y any/c))]
 
   [matrix-rectangle (-> matrix? (listof (listof any/c)))]
@@ -48,6 +49,10 @@
         (r matrix?)
         #:post/name (nuw r) "expected width" (= (matrix-#columns r) nuw)
         #:post/name (nuh r) "expected height" (= (matrix-#rows r) nuh))]
+
+  [matrix-frame
+   (->i ([m matrix?] [lox [listof any/c]]) (r matrix?))]
+        
 
   [matrix-slide-row    (->i ([m matrix?] [d left-right/c] [r (m) (row/c m)] [x any/c]) (y matrix+))]
   [matrix-slide-column (->i ([m matrix?] [d up-down/c] [c (m) (col/c m)] [x any/c]) (y matrix+))]  
@@ -134,6 +139,13 @@
 
 (define (matrix-columns m) (matrix-rectangle (matrix-transpose m)))
 
+#; {[Matrix X] N N [#:default D] -> (U X D)}
+(define (matrix-ref* M row col #:default (default 0))
+    (if (and (<= 0 row (- (matrix-#columns M) 1))
+             (<= 0 col (- (matrix-#rows M) 1)))
+        (matrix-ref M row col) 
+        default))
+
 (define (matrix-ref M r c)
   (list-ref (list-ref (inner-rectangle M) r) c))
 
@@ -191,12 +203,25 @@
 ;; ---------------------------------------------------------------------------------------------------
 ;; padding a matrix 
 (define (matrix-pad M extras #:nuwidth (nuw 7) #:nuheight (nuh 7))
-  (make-matrix (rectangle-col-fill (matrix-rectangle M) extras nuw nuh)))
+  (define R (matrix-rectangle M))
+  (define P (rectangle-col-fill R extras nuw nuh))
+  (make-matrix P))
+
+(define (matrix-frame M extras)
+  (define R (matrix-rectangle M))
+  (define r (matrix-#rows M))
+  (define c (matrix-#columns M))
+  (let* ([P R]
+         [X (drop extras (+ c 2))]
+         [P (rectangle-col-fill P X (+ r 1) (+ c 1))]
+         [P (rectangle-col-fill P X (+ r 2) (+ c 1) #:append (λ (row fill) (append fill row)))]
+         [P (cons (take extras (+ c 2)) P)])
+    (make-matrix P)))
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; padding a rectangle 
 #; {∀ X: [Rectable X] [Listof X] N N -> [Rectangle X]}
-(define (rectangle-col-fill R extras nuw nuh)
+(define (rectangle-col-fill R extras nuw nuh #:append (append append))
   (let rectangle-col-fill ([R R] [extras extras] [result '()])
     (cond
       [(empty? R) (rectangle-row-fill (reverse result) extras nuw nuh)]
@@ -302,13 +327,25 @@
   (check-equal? (matrix-transpose M1) M1-transposed "transpose basic")
   (check-equal? (matrix-transpose (matrix-transpose M1)) M1 "transpose o transpose")
 
-  (check-equal? (matrix-pad M1 '[a b c d e f] #:nuwidth 4 #:nuheight 3) M1-at-3-x-4 "padding")) 
+  (check-equal? (matrix-pad M1 '[a b c d e f] #:nuwidth 4 #:nuheight 3) M1-at-3-x-4 "padding")
+
+  (module+ test
+    (check-equal? 
+     (matrix-frame
+      (matrix
+       '[A B]
+       '[C D])
+      '(0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))
+     (matrix
+      '[0 0 0 0]
+      '[0 A B 0]
+      '[0 C D 0]
+      '[0 0 0 0]) "matrix-frame"))) 
 
 (module+ test
   (define R1 (make-matrix (build-list 11 (λ (row) (build-list 11 (λ (col) [list row col]))))))
 
   (time (for ([i 100090]) (matrix-slide-column R1 matrix-down 1 'anyany) (matrix-undo R1) (void))))
-
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; negative tests

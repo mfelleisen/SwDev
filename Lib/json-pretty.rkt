@@ -35,14 +35,14 @@
                            #:indent-increment [indent-increment 2])
   (set! *indent-level 0)
   (void ;; to blank out the return status of write-byte; otherwise we get 1
-  (write-json/pretty* 'write-json/pretty
-                      x
-                      o
-                      jsnull
-                      enc
-                      indent-maps?
-                      indent-lists?
-                      indent-increment)))
+   (write-json/pretty* 'write-json/pretty
+                       x
+                       o
+                       jsnull
+                       enc
+                       indent-maps?
+                       indent-lists?
+                       indent-increment)))
 
 (define (write-json/pretty* who x o jsnull enc indent-maps? indent-lists? indent-increment)
   (let loop ([x x])
@@ -142,7 +142,7 @@
 ;; ---------------------------------------------------------------------------------------------------
 ;; not a test
 
-#;
+
 (module+ test
   (define j1
     '[ ["hello"
@@ -165,10 +165,14 @@
   
   (check-equal? 
    (with-input-from-string
-    (with-output-to-string
-     (lambda ()
-       (write-json/pretty
-        j1
-        #:indent-lists? #t)))
-    read-json)
-   j1))
+       (with-output-to-string
+         (lambda ()
+           (write-json/pretty
+            j1
+            #:indent-lists? #t)))
+     read-json)
+   j1)
+  
+  (write-json/pretty
+   j1
+   #:indent-lists? #t))

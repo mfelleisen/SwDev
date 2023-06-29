@@ -21,6 +21,8 @@
  ;; like r-check-equal? but with an equality predicate passed in first 
  r-check
  
+ r-check-pred
+
  #; {[-> Void] [Listof JSexpr] [Listof JSexpr] String -> Void}
  ;; convert inputs and expected to JSON, run main on converted inputs, compare with expected
  ;; IF recording is set, also record the specified test cases as pairs of files
@@ -82,6 +84,23 @@
               -equal?
               (tee (post (with-output-to-bytes (lambda () (with-input-from-bytes in:str main)))))
               expected
+              msg))
+  
+         (record inputs actual))]])
+
+(define-syntax (r-check-pred stx)
+  [syntax-case stx ()
+    [(_ pred? main inputs msg)
+     #`(begin
+         (define in:str (prepare inputs))
+
+         (define actual (gensym))
+         (define (tee x) (set! actual x) x)
+
+         #,(syntax/loc stx
+             (check-true
+              (pred?
+               (tee (post (with-output-to-bytes (lambda () (with-input-from-bytes in:str main))))))
               msg))
   
          (record inputs actual))]])
