@@ -11,7 +11,7 @@
   ;; RACE CND it suffers from the usual race condition (someone can grab the port _after_ return)
   ;; EFFECT Create a starter-file in the users ~/Tmp directory
   ;; EXN this will fail when all ~40,000 ports above BASE (2345) are in use 
-  (get-starter-port (-> port-number?))))
+  (get-starter-port (->* (port-number?) port-number?))))
 
 ; ---------------------------------------------------------------------------------------------------
 (define LOCALHOST    "127.0.0.1")
@@ -23,8 +23,8 @@
 (define PORT-STARTER-FILE (build-path TEMP "port-starter-file.rktd"))
 
 ;; ---------------------------------------------------------------------------------------------------
-(define (get-starter-port)
-  (define p0 (retrieve-port-from-starter-file))
+(define (get-starter-port (default REMOTE-PORT0))
+  (define p0 (retrieve-port-from-starter-file default))
   (define p (find-port-not-in-use p0))
   (write-port-to-starter-file p)
   p)
@@ -39,13 +39,13 @@
         (begin0 p
                 (custodian-shutdown-all (current-custodian)))))))
 
-#; {-> PortNumber}
-(define (retrieve-port-from-starter-file)
+#; {PortNumber -> PortNumber}
+(define (retrieve-port-from-starter-file default)
   (cond
     [(file-exists? PORT-STARTER-FILE)
      (define candidate (with-input-from-file PORT-STARTER-FILE read))
      (if (port-number? candidate) candidate REMOTE-PORT0)]
-    [else REMOTE-PORT0]))
+    [else default]))
 
 #; {PortNumber -> Void}
 (define (write-port-to-starter-file p)
