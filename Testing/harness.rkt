@@ -596,7 +596,7 @@
   (or (json-equal? expected-out actual-out #:inexact-okay? (json-precision))
       (match* (expected-out actual-out)
         [((list (? string? expected-single)) (list (? string? actual-single)))
-         (regexp-match expected-single actual-single)]
+         (string=? expected-single actual-single)]
         [(_ _) #false])))
 
 ;; -----------------------------------------------------------------------------
