@@ -199,24 +199,26 @@
                  #:tcp   (tcp #false)
                  #:inexact-okay? [p 0.001])
          tests-directory-name server-to-be-tested)
+  (define (setup)
+    ;; We want a new port for every test run, so obtain one in setup
+    ;; and create a new connect closing over the port.
+    (define-values (cmd-new port#)
+      (cond
+        [(and tcp (empty? cmd))
+         (define port# (get-starter-port tcp))
+         (values (list (~a port#)) port#)]
+        [tcp (values cmd tcp)]
+        [else (values cmd #false)]))
 
-  (define-values (cmd-new port#)
-    (cond
-      [(and tcp (empty? cmd))
-       (define port# (get-starter-port tcp))
-       (values (list (~a port#)) port#)]
-      [tcp (values cmd tcp)]
-      [else (values cmd #false)]))
-  
-  #; {InputPort OutputPort -> (values InputPort OutputPort)}
-  ;; deliver two ports on which communication with the server happens 
-  (define (connect from to)
-    (cond
-      [port# (channel2 ports->objects (try-to-connect-to-times RETRY-COUNT port#))]
-      [else (values from to)]))
+    #; {InputPort OutputPort -> (values InputPort OutputPort)}
+    ;; deliver two ports on which communication with the server happens 
+    (define (connect from to)
+      (cond
+        [port# (channel2 ports->objects (try-to-connect-to-times RETRY-COUNT port#))]
+        [else (values from to)]))
+      ((make-setup server-to-be-tested cmd-new connect)))
 
   (json-precision p)
-  (define setup (make-setup server-to-be-tested cmd-new connect))
   (work-horse setup server-to-be-tested tests-directory-name valid-json))
 
 ;; ---------------------------------------------------------------------------------------------------
