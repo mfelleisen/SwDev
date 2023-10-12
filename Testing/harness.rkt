@@ -431,20 +431,21 @@
 (define (test-them setup all-tests)
   (for/list ((t all-tests) (i-th-test (in-naturals)))
     (match-define `(,in-fname ,input* ,out-fname ,expected-out) t)
+    (define how-many-expected (length expected-out))
     (displayln `(testing ,in-fname ,out-fname) (current-error-port))
     (define actual-output
       (for*/list ([pretty     ([plain-and-pretty-json?])]
                   [trickle    ((fast-and-slow-delivery?))]
                   [terminated ([with-and-without-trailing-newline?])]
                   [escaped    ((with-and-without-escaped-unicode?))])
-        (test-one pretty trickle terminated escaped setup input*)))
+        (test-one pretty trickle terminated escaped setup input* how-many-expected)))
     (compare input* expected-out actual-output)))
 
-#; (Boolean Boolean Boolean Boolean [-> Setup] [Listof JSexpr]
+#; (Boolean Boolean Boolean Boolean [-> Setup] [Listof JSexpr] Natural
             ->
             [List [List Symbol Symbol Symbol Symbol] JSexpr])
 ;; run a single test in the specified context, restart the to-be-tested program
-(define (test-one pretty trickle terminated escaped setup input*)
+(define (test-one pretty trickle terminated escaped setup input* how-many-expected)
   (define pretty-sym (if pretty 'pretty 'plain))
   (define trickle-sym (if trickle 'slow 'fast))
   (define terminated-sym (if terminated 'with-newline 'with-space))
@@ -458,7 +459,7 @@
                    (trailing-newline?    terminated)
                    (encode-all-unicode?  escaped))
       (if (and in out)
-          (feed-and-receive in out input*)
+          (feed-and-receive in out input* how-many-expected)
           'failed-to-establish-connection)))
   (log-info "received actual ... ~v" actual)
   (tear-down)
@@ -478,25 +479,25 @@
     (list in-fname input out-fname output)))
 
 ;; ---------------------------------------------------------------------------------------------------
-#; (InputPort OutputPort [Listof JSexpr] -> [Listof JSexpr])
-(define (feed-and-receive in out input*)
+#; (InputPort OutputPort [Listof JSexpr] Natural -> [Listof JSexpr])
+(define (feed-and-receive in out input* how-many-expected)
   (define batch? (test-with-batch-mode?))
   (parameterize ()
-    (write-and-read batch? input* in out)))
+    (write-and-read batch? input* in out how-many-expected)))
 
-#; {[Listof JSexpr] -> [Listof JSexpr]}
+#; {[Listof JSexpr] Natural -> [Listof JSexpr]}
 ;; EFFECT
 ;;  (1) send all inputs to the input port
 ;;  (2) if interactive, read response for each input
 ;;  (3) in any case, when all inputs are sent, close port and read all responses 
-(define (write-and-read batch? remaining-inputs0 in out)
+(define (write-and-read batch? remaining-inputs0 in out how-many-expected)
   (let write-and-read ([remaining-inputs remaining-inputs0])
     (match remaining-inputs
       ['()
        ; We're pretty sure the need for this is a bug in Racket's TCP port handling.
        (with-handlers ([exn:fail:network? (lambda (e) (void))])
          (send out close))
-       (read-rest in)]
+       (read-rest in how-many-expected)]
       [(cons i rest)
        (send out message i)
        (if batch?
@@ -506,14 +507,20 @@
              [(? terminal-value? v) (list v)]
              [v (cons v (write-and-read rest))]))])))
 
-#; [-> [Listof JSexpr]]
+(define TOO-MANY "the executable outputs too many JSON values")
+
+#; [InputPort Natural -> [Listof JSexpr]]
 ;; EFFECT keep reading until current output port is closed 
-(define (read-rest in)
-  (define next (send in read))
-  (match next
-    [(? eof-object?) '()]
-    [(? terminal-value? v) (list v)]
-    [v (cons v (read-rest in))]))
+(define (read-rest in [how-many-expected 1000]) ;; for the other call
+  (cond
+    [(< how-many-expected 0)
+     [list TOO-MANY]]
+    [else 
+     (define next (send in read))
+     (match next
+       [(? eof-object?) '()]
+       [(? terminal-value? v) (list v)]
+       [v (cons v (read-rest in (sub1 how-many-expected)))])]))
 
 ;; ---------------------------------------------------------------------------------------------------
 (define (make-exn-safe test-pred)
