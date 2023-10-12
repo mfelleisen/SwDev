@@ -490,8 +490,8 @@
 ;;  (1) send all inputs to the input port
 ;;  (2) if interactive, read response for each input
 ;;  (3) in any case, when all inputs are sent, close port and read all responses 
-(define (write-and-read batch? remaining-inputs0 in out how-many-expected)
-  (let write-and-read ([remaining-inputs remaining-inputs0])
+(define (write-and-read batch? remaining-inputs0 in out how-many-expected0)
+  (let write-and-read ([remaining-inputs remaining-inputs0] [how-many-expected how-many-expected0])
     (match remaining-inputs
       ['()
        ; We're pretty sure the need for this is a bug in Racket's TCP port handling.
@@ -501,11 +501,11 @@
       [(cons i rest)
        (send out message i)
        (if batch?
-           (write-and-read rest)
+           (write-and-read rest how-many-expected)
            (match (send in read)
              [(? eof-object?) '()]
              [(? terminal-value? v) (list v)]
-             [v (cons v (write-and-read rest))]))])))
+             [v (cons v (write-and-read rest (sub1 how-many-expected)))]))])))
 
 (define TOO-MANY "the executable outputs too many JSON values")
 

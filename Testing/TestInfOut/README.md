@@ -2,8 +2,9 @@
 ## The Tested Process Outputs an Infinite Number of JSON Values
 
 ```
-$ ./xtest ../TestInfOut/ inf.rkt
+$ ./xbatch ../TestInfOut/ inf.rkt
+$ ./xstream ../TestInfOut/ inf.rkt
 ```
 
-must fail with "inf.rkt outputs too many JSON values"
+must fail with "... outputs .. too many JSON values"
 
