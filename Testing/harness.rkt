@@ -241,7 +241,7 @@
 ;; also return a function for tearing down resources 
 (define ([make-setup-server-client pc client-to-be-tested ps server-to-be-tested])
 
-  (define cmd (list (~a (get-starter-port))))
+  (define cmd (list (~a (get-starter-port 10000)))) ;; MF: raw fix, need to check git history 
   (define server-setup (make-setup server-to-be-tested cmd values))
   (define client-setup (make-setup client-to-be-tested cmd values))
   (define-values (from-server to-server server-tear-down) [server-setup])
