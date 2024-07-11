@@ -23,7 +23,7 @@
  
  r-check-pred
 
- #; {[-> Void] [Listof JSexpr] [Listof JSexpr] String -> Void}
+ #; {[-> Void] [Listof JSexpr] [Listof JSexpr] String  #:extras String -> Void}
  ;; convert inputs and expected to JSON, run main on converted inputs, compare with expected
  ;; IF recording is set, also record the specified test cases as pairs of files
  r-check-equal?
@@ -45,13 +45,16 @@
 (require rackunit)
 (require json)
 
+(require (for-syntax syntax/parse))
+
 ;; ---------------------------------------------------------------------------------------------------
 (define recording (make-parameter #false))
 (define start-at  (make-parameter -1))
 
 (define-syntax (r-check-equal? stx)
-  (syntax-case stx ()
-    [(r-check-equal? main inputs expected msg)
+  (syntax-parse stx 
+    [(r-check-equal? main inputs expected msg
+                     (~optional (~seq (~datum #:extras) extras) #:defaults ([extras  #'#false])))
      #`(begin
          (define in:str (prepare inputs))
          (define ex:str (prepare expected))
@@ -67,7 +70,7 @@
               expected
               msg))
   
-         (record inputs actual))]))
+         (record inputs actual #:extras extras))]))
 
 (define-syntax (r-check stx)
   [syntax-case stx ()
@@ -140,9 +143,9 @@
                 (dev/null
                  (with-output-to-bytes (λ () (with-input-from-bytes in:str main)))) msg))))]))
 
-#;[[Listof Jsexpr] [Listof Jsexpr] -> Void]
+#;[[Listof Jsexpr] [Listof Jsexpr] [#:extras (U False String)] -> Void]
 ;; write test input and test output to next pair of test files in (recording) directory, if any 
-(define (record input output #:write-inputs (wi send-message))
+(define (record input output #:write-inputs (wi send-message) #:extras (extras #false))
   (unless (symbol? output)
     (define base (recording))
     (when base
@@ -151,13 +154,18 @@
       (define n (~a (start-at)))
       (define -in.json  (build-path base (format "~a-in.json" n)))
       (define -out.json (build-path base (format "~a-out.json" n)))
-      (write-to -in.json input wi)
+      (write-to -in.json input wi #:extras extras)
       (write-to -out.json output (lambda (x) (send-message x))))))
 
-;; [X] [PathString [Listof X] [X -> Void] -> Void]
+;; [X] [PathString [Listof X] [X -> Void] #:extras (U False String) -> Void]
 ;; write and optionally replace file 
-(define (write-to file-name input writer)
-  (with-output-to-file file-name (lambda () (for ((x input)) (writer x))) #:exists 'replace))
+(define (write-to file-name stuff writer #:extras (extras #false))
+  (with-output-to-file file-name
+     #:exists 'replace
+    (lambda ()
+      (for ((x stuff)) (writer x))
+      (when extras 
+        (printf "~a" extras)))))
 
 #; {(U String [Listof JSexpr]) -> Bytes}
 (define (prepare x)
