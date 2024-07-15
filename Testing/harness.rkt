@@ -216,7 +216,7 @@
       (cond
         [port# (channel2 ports->objects (try-to-connect-to-times RETRY-COUNT port#))]
         [else (values from to)]))
-      ((make-setup server-to-be-tested cmd-new connect)))
+    ((make-setup server-to-be-tested cmd-new connect)))
 
   (json-precision p)
   (work-horse setup server-to-be-tested tests-directory-name valid-json))
