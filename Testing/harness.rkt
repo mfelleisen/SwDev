@@ -601,8 +601,12 @@
   (check-false (compare-expected-actual cons cons) "the function dispatches on JSON only")
   (check-false (compare-expected-actual 'a 'a) "the function dispatches on JSON only"))
 
+(provide special-equal?)
+(define special-equal? (make-parameter (λ _ #false)))
+
 (define (compare-expected-actual expected-out actual-out)
   (or (json-equal? expected-out actual-out #:inexact-okay? (json-precision))
+      ([special-equal?] expected-out actual-out #;inexact-okay? (json-precision))
       (match* (expected-out actual-out)
         [((list (? string? expected-single)) (list (? string? actual-single)))
          (string=? expected-single actual-single)]
