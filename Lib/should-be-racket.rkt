@@ -2,6 +2,8 @@
 
 (provide
 
+ all-equal? 
+
  #; {[Setof X] [X -> X] -> (U False [Setof X])}
  set-member
  set-such-that
@@ -160,3 +162,9 @@
              ;; loop args
              (rest))])]
       [_ #f])))
+
+;; ---------------------------------------------------------------------------------------------------
+(define (all-equal? l)
+  (cond
+    [(empty? (rest l)) #true]
+    [else (and (equal? (first l) (second l)) (all-equal? (rest l)))]))
