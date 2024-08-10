@@ -1,8 +1,12 @@
 #lang racket
 
 (provide
+ 
+ all-equal?
 
- all-equal? 
+ #; {[X -> Real] [Listof X] -> [Listof X]}
+ all-argmax
+ all-argmin
 
  #; {[Setof X] [X -> X] -> (U False [Setof X])}
  set-member
@@ -168,3 +172,15 @@
   (cond
     [(empty? (rest l)) #true]
     [else (and (equal? (first l) (second l)) (all-equal? (rest l)))]))
+
+;; ---------------------------------------------------------------------------------------------------
+
+#; {[X -> Real] [Listof X] -> [Listof X]}
+(define (all-argmax val lox)
+  (define the-max (val (argmax val lox)))
+  (filter (λ (ex) (= (val ex) the-max)) lox))
+
+(define (all-argmin val lox)
+  (define the-min (val (argmin val lox)))
+  (filter (λ (ex) (= (val ex) the-min)) lox))
+
