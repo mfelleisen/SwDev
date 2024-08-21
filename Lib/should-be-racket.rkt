@@ -16,24 +16,18 @@
  when*
  unless*
  and*
-
- random-pick
-
+ 
  #; {-> Void} 
  with-error-to-string
 
  #; (dev/null e0 e ...)
- dev/null 
+ dev/null)
 
- #; {[Cons X [Listof X]] -> [Listof X]}
- all-but-last
-
- #; {[Cons X [Listof X]] -> (values [Listof X] X)}
- split-off-last)
-
-;; TODO make them more like the real thing  
+(provide
+ (all-from-out "list-private.rkt"))
 
 ;; ---------------------------------------------------------------------------------------------------
+(require "list-private.rkt")
 (require syntax/parse/define (for-syntax syntax/parse))
 (module+ test (require rackunit))
 
@@ -90,35 +84,7 @@
 (module+ test
   (check-equal? (with-error-to-string (λ () (displayln "test" (current-error-port)))) "test\n"))
 
-;; ---------------------------------------------------------------------------------------------------
-(define (all-but-last l)
-  (if (and (pair? l) (list? l))
-      (let loop ([l l] [x (cdr l)])
-        (if (pair? x)
-            (cons (car l) (loop x (cdr x)))
-            '()))
-      (raise-argument-error 'last "(and/c list? (not/c empty?))" l)))
-
-(define (split-off-last l)
-  (define lst (gensym))
-  (if (and (pair? l) (list? l))
-      (values 
-       (let loop ([l l] [x (cdr l)])
-         (if (pair? x)
-             (cons (car l) (loop x (cdr x)))
-             (begin (set! lst (car l)) '())))
-       lst)
-      (raise-argument-error 'split-off-last "(and/c list? (not/c empty?))" l)))
-
-(module+ test
-  (check-equal? (all-but-last '(a b c)) '(a b))
-  (check-equal? (let-values (([all-but last] (split-off-last '(a b c)))) `(,all-but ,last))
-                '((a b) c)))
-
 ;; -----------------------------------------------------------------------------
-
-(define (random-pick lox)
-  (list-ref lox (random (length lox))))
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; an iterator for going over the suffixes of a list in order (except for the empty one)

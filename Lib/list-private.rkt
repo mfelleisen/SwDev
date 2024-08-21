@@ -18,7 +18,10 @@
  split-off-last
 
  #; {[Listof X] N -> [Listof [Listof X]]}
- split-list)
+ split-list
+
+ random-pick
+ all-but-last)
 
 ;; ---------------------------------------------------------------------------------------------------
 (module+ test
@@ -44,8 +47,17 @@
             (cons (car l) (loop x (cdr x)))
             '()))))
 
+(define (all-but-last l)
+  (if (and (pair? l) (list? l))
+      (let loop ([l l] [x (cdr l)])
+        (if (pair? x)
+            (cons (car l) (loop x (cdr x)))
+            '()))
+      (raise-argument-error 'last "(and/c list? (not/c empty?))" l)))
+
 (define (split-off-last l)
   (define lst (gensym))
+  ;; relies on order of evaluation 
   (if (not (pair? l))
       (raise-argument-error 'split-off-last "(and/c list? (not/c empty?))" l)
       (values 
@@ -64,8 +76,16 @@
        (define row1 (take t* rows#))
        (cons row1 (L (drop t* rows#)))])))
 
+(define (random-pick lox)
+  (list-ref lox (random (length lox))))
+
 
 ;; ---------------------------------------------------------------------------------------------------
+(module+ test
+  (check-equal? (all-but-last '(a b c)) '(a b))
+  (check-equal? (let-values (([all-but last] (split-off-last '(a b c)))) `(,all-but ,last))
+                '((a b) c)))
+
 (module+ test
   (check-equal? (list-rotate- '[a b c]) '[c a b])
   (check-equal? (list-rotate+ '[a b c])  '[b c a])
