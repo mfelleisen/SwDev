@@ -22,9 +22,12 @@
            (define-for-syntax all-names (list 'n ...))
            (define-syntax (scenario+ stx)
              (syntax-parse stx 
-               [(_ kind:id args expected msg:str)
+               [(_ kind:id args expected msg)
                 #:fail-unless (member (syntax-e #'kind) all-names) "name not defined"
-                #'(set! kind (append kind (list [list args expected msg])))]))
+                #'(let ([m msg])
+                    (unless (string? m)
+                      (error 'scenario+ "expects string, given ~a\n" 'msg))
+                    (set! kind (append kind (list [list args expected msg]))))]))
            (define name '[])
            ...)])))
 (require 'server)
