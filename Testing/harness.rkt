@@ -27,7 +27,7 @@
    
    ;; runs `path-to-client-executable` as a parallel client process with command-line cl 
    ;; feeding it the JSexprs in every test input file from `path-to-test-inputs` one at a time
-   ;; on TCP port p, if specified, in which case the harness is the server.
+   ;; on TCP port p, if specified, in which case the harness is the client.
 
    ;; The harness compares the actual output of `path-to-client-executable` with the one expected
    ;; output in <n>-out. The comparison is JSexpr-based not text-based. 
@@ -45,7 +45,7 @@
   
   [server
    ;; like client, but the given exec plays the role of TCP server if #:tcp PORT comes along
-   ;; and the harness takes on the role of client 
+   ;; and the harness takes on the role of server 
    (->i (#:check [valid-json (-> any/c any)])
         (#:cmd   (command-line-args (listof string?))
          #:tcp   (tcp-on (or/c #false (and/c (>/c 1024) (</c 65000))))
@@ -204,9 +204,9 @@
     ;; and create a new connect closing over the port.
     (define-values (cmd-new port#)
       (cond
-        [(and tcp (empty? cmd))
+        [(and tcp #;(empty? cmd))
          (define port# (get-starter-port tcp))
-         (values (list (~a port#)) port#)]
+         (values (append cmd (list (~a port#))) port#)]
         [tcp (values cmd tcp)]
         [else (values cmd #false)]))
 
