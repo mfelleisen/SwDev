@@ -612,10 +612,8 @@
 
 #; {[Listof JSexpr] [Listof JSexpr] -> Boolean}
 (define (compare-with-special? expected* actual*)
-  (define special [special-equal?])
-  (define precise (json-precision))
   (and (= (length expected*) (length actual*))
-       (andmap (λ (e a) (special e a  #;inexact-okay? precise)) expected* actual*)))
+       ([special-equal?] expected* actual* (json-precision))))
 
 #; {[List String] [List String] -> Boolean}
 (define (compare-strings expected* actual*)
