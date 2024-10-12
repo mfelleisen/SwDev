@@ -433,13 +433,13 @@
     (match-define `(,in-fname ,input* ,out-fname ,expected-out) t)
     (define how-many-expected (length expected-out))
     (displayln `(testing ,in-fname ,out-fname) (current-error-port))
-    (define actual-output
+    (define actual-output*-with-classifications
       (for*/list ([pretty     ([plain-and-pretty-json?])]
                   [trickle    ((fast-and-slow-delivery?))]
                   [terminated ([with-and-without-trailing-newline?])]
                   [escaped    ((with-and-without-escaped-unicode?))])
         (test-one pretty trickle terminated escaped setup input* how-many-expected)))
-    (compare input* expected-out actual-output)))
+    (compare input* expected-out actual-output*-with-classifications)))
 
 #; (Boolean Boolean Boolean Boolean [-> Setup] [Listof JSexpr] Natural
             ->
@@ -564,8 +564,8 @@
   (define number-outputs (length actual-outputs))
   (define partial-score  (/ number-outputs))
   (define score (for/sum [(entry actual-outputs)]
-                  (match-define (list _classification actual-out) entry)
-                  (if (compare-expected-actual expected-out actual-out) partial-score 0)))
+                  (match-define (list _classification actual-output) entry)
+                  (if (compare-expected-actual expected-out actual-output) partial-score 0)))
 
   (when (not (= score 1))
     (displayln '---------------------------------)
@@ -604,13 +604,26 @@
 (provide special-equal?)
 (define special-equal? (make-parameter (λ _ #false)))
 
-(define (compare-expected-actual expected-out actual-out)
-  (or (json-equal? expected-out actual-out #:inexact-okay? (json-precision))
-      ([special-equal?] expected-out actual-out #;inexact-okay? (json-precision))
-      (match* (expected-out actual-out)
-        [((list (? string? expected-single)) (list (? string? actual-single)))
-         (string=? expected-single actual-single)]
-        [(_ _) #false])))
+#; {[Listof JSexpr] [Listof JSexpr] -> Boolean}
+(define (compare-expected-actual expected* actual*)
+  (or (json-equal? expected* actual* #:inexact-okay? (json-precision))
+      (compare-with-special? expected* actual*)
+      (compare-strings expected* actual*)))
+
+#; {[Listof JSexpr] [Listof JSexpr] -> Boolean}
+(define (compare-with-special? expected* actual*)
+  (define special [special-equal?])
+  (define precise (json-precision))
+  (and (= (length expected*) (length actual*))
+       (andmap (λ (e a) (special e a  #;inexact-okay? precise)) expected* actual*)))
+
+#; {[List String] [List String] -> Boolean}
+(define (compare-strings expected* actual*)
+  (match* (expected* actual*)
+    [((list (? string? expected-single)) (list (? string? actual-single)))
+     (string=? expected-single actual-single)]
+    [(_ _) #false]))
+
 
 ;; -----------------------------------------------------------------------------
 #; {String -> [Maybe [Listof JSexpr]]}
