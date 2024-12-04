@@ -13,6 +13,9 @@
   ;; EXN this will fail when all ~40,000 ports above BASE (2345) are in use 
   (get-starter-port (->* (port-number?) port-number?))))
 
+;; ---------------------------------------------------------------------------------------------------
+(require racket/os)
+
 ; ---------------------------------------------------------------------------------------------------
 (define LOCALHOST    "127.0.0.1")
 (define REMOTE-PORT0 23456)
@@ -20,7 +23,7 @@
 (define HOME (find-system-path 'home-dir))
 (define TEMP (build-path HOME "Tmp/"))
 (unless (directory-exists? TEMP) (make-directory TEMP))
-(define PORT-STARTER-FILE (build-path TEMP "port-starter-file.rktd"))
+(define PORT-STARTER-FILE (build-path TEMP (~a (gethostname) "-port-starter-file.rktd")))
 
 ;; ---------------------------------------------------------------------------------------------------
 (define (get-starter-port (default REMOTE-PORT0))
