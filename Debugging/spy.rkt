@@ -29,7 +29,7 @@
                                (if (null? (rest val*)) (first val*) (apply values val*))))))]))
 
 (define (to-error-port val expr src loc)
-  (fprintf (current-error-port) "Expression~n~a~nat ~a : ~a~nevaluated to~n~a~n~n" expr src loc val))
+  (fprintf (current-error-port) "Expression~n~v~nat ~v: ~v~nevaluated to~n~v~n~n" expr src loc val))
 
 ;; ---------------------------------------------------------------------------------------------------
 (module+ test 
