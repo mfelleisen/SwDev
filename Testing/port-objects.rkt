@@ -52,6 +52,7 @@
 (define out-port%
   (class object% (init-field out)
     (define/public (message x) (send-message x out))
+    (define/public (sexp x) (pretty-write x out))
     (define/public (close) (close-output-port out))
     (super-new)))
 

@@ -2,13 +2,21 @@
 
 ;; support for the three major ways of running tests in Sw Dev
 
-;; The names of the JSON testfiles is determined by the following functions: 
+;; The names of the JSON testfiles is determined by the following functions:
+
+(define in-stem "^(.*/)?([^/]+-)?([0-9]+)-in")
+(define in-json (pregexp (string-append in-stem ".json$")))
+(define in-ss   (pregexp (string-append in-stem ".ss$")))
 
 (define (recognize-input-filename fn)
-  (regexp-match #px"^(.*/)?([^/]+-)?([0-9]+)-in.json$" fn))
+  (if [sexp?] (regexp-match in-ss fn) (regexp-match in-json fn)))
+
+(define out-stem "~a~a-out")
+(define out-json (string-append out-stem ".json"))
+(define out-ss   (string-append out-stem ".ss"))
 
 (define (matching-output-file-name prefix numberstr)
-  (format "~a~a-out.json" (or prefix "") numberstr))
+  (format (if [sexp?] out-ss out-json) (or prefix "") numberstr))
 
 ;; Normally, we just use <n>-in.json and <n>-out.json for n = 0, 1, 2, ...
 
@@ -37,6 +45,7 @@
    
    (->i (#:check [valid-json (-> any/c any)])
         (#:cmd   (command-line-args (listof string?))
+         #:sexp-input (sexp-input boolean?) ;; sexp? from 2htdp/universe?
          #:tcp   (tcp-on (or/c #false (and/c (>/c 1024) (</c 65000))))
          #:inexact-okay? [ok (or/c #false (and/c real? (</c 1.0) (>/c 0.0)))])
         (r (->i ([test-directory-path path-string?]
@@ -194,11 +203,17 @@
   (define setup (make-setup client-to-be-tested cmd connect))
   (work-horse setup client-to-be-tested tests-directory-name valid-json))
 
+(define sexp? (make-parameter #false))
+
 (define ((client #:check valid-json
                  #:cmd   (cmd '())
+                 #:sexp-input (s? #false)
                  #:tcp   (tcp #false)
                  #:inexact-okay? [p 0.001])
          tests-directory-name server-to-be-tested)
+  
+  (sexp? s?)
+  
   (define (setup)
     ;; We want a new port for every test run, so obtain one in setup
     ;; and create a new connect closing over the port.
@@ -415,7 +430,7 @@
   (parameterize ()
     (displayln `(testing ,program-to-be-tested))
     
-    (define file*       (json-test-files (in-directory tests-directory-name (lambda (_path) #f))))
+    (define file*       (all-test-files (in-directory tests-directory-name (lambda (_path) #f))))
     (define test*       (retrieve-all-tests file*))
     (define all-tests#  (length test*))
     (define valid-tests (eliminate-bad-tests valid-json? test*))
@@ -473,9 +488,10 @@
 
 #; ([Listof [List FileName FileName]] -> [Listof TestSpec])
 (define (retrieve-all-tests file*)
+  
   (for/list ((x file*) (_i (in-naturals)) #:when (< _i (test-the-first-n-at-most)))
     (match-define `(,in-fname ,out-fname) x)
-    (match-define `(,input ,output) (list (file->json in-fname) (file->json out-fname)))
+    (match-define `(,input ,output) (list (file->ss-or-json in-fname) (file->ss-or-json out-fname)))
     (list in-fname input out-fname output)))
 
 ;; ---------------------------------------------------------------------------------------------------
@@ -491,6 +507,11 @@
 ;;  (2) if interactive, read response for each input
 ;;  (3) in any case, when all inputs are sent, close port and read all responses 
 (define (write-and-read batch? remaining-inputs0 in out how-many-expected0)
+  (define to-client
+    (if [sexp?]
+        (λ (i) (send out sexp i))
+        (λ (i) (send out message i))))
+
   (let write-and-read ([remaining-inputs remaining-inputs0] [how-many-expected how-many-expected0])
     (match remaining-inputs
       ['()
@@ -499,13 +520,15 @@
          (send out close))
        (read-rest in how-many-expected)]
       [(cons i rest)
-       (send out message i)
+       (to-client i)
        (if batch?
            (write-and-read rest how-many-expected)
            (match (send in read)
              [(? eof-object?) '()]
              [(? terminal-value? v) (list v)]
              [v (cons v (write-and-read rest (sub1 how-many-expected)))]))])))
+
+(require SwDev/Debugging/spy)
 
 (define TOO-MANY "the executable outputs too many JSON values")
 
@@ -516,8 +539,7 @@
     [(< how-many-expected 0)
      [list TOO-MANY]]
     [else 
-     (define next (send in read))
-     (match next
+     (match (send in read)
        [(? eof-object?) '()]
        [(? terminal-value? v) (list v)]
        [v (cons v (read-rest in (sub1 how-many-expected)))])]))
@@ -584,22 +606,22 @@
 
 (module+ test
   (json-precision 0.001)
-  (check-true (compare-expected-actual 3.0 3))
+  (check-true (compare-expected-actual '(3.0) '(3)))
   
-  (check-true (compare-expected-actual #f #f))
-  (check-false (compare-expected-actual #f 3))
+  (check-true (compare-expected-actual '(#f) '(#f)))
+  (check-false (compare-expected-actual '(#f) '(3)))
 
   (check-true (compare-expected-actual (json-null) (json-null)))
 
-  (check-true (compare-expected-actual "🤪" "🤪"))
-  (check-false (compare-expected-actual "🤪" "🤪 hello"))
+  (check-true (compare-expected-actual '["🤪"] '["🤪"]))
+  (check-false (compare-expected-actual '["🤪"] '["🤪 hello"]))
 
   (check-true (compare-expected-actual (hash 'a 3.0 'b "hello world") (hash 'b "hello world"  'a 3)))
   (check-true
    (compare-expected-actual (list "a" 3.0 "b" "hello world") (list "a" 3 "b" "hello world")))
 
-  (check-false (compare-expected-actual cons cons) "the function dispatches on JSON only")
-  (check-false (compare-expected-actual 'a 'a) "the function dispatches on JSON only"))
+  (check-false (compare-expected-actual `[,cons] `[,cons]) "the function dispatches on JSON only")
+  (check-false (compare-expected-actual '(a) '(a)) "the function dispatches on JSON only"))
 
 (provide special-equal?)
 (define special-equal? (make-parameter (λ _ #false)))
@@ -627,8 +649,9 @@
 #; {String -> [Maybe [Listof JSexpr]]}
 ;; read f as JSON file if possible 
 ;; effect: display its name if it is not
-(define (file->json f)
-  (with-input-from-file f (all-json-expressions f)))
+(define (file->ss-or-json f)
+  (define get-all (if (sexp?) (one-ss-expression f) (all-json-expressions f)))
+  (with-input-from-file f get-all))
 
 ;                                     
 ;                                     
@@ -688,6 +711,26 @@
       [(terminal-value? next) (eprintf "~a contains something other than JSON\n" f) #false]
       [else (all-json-lines (cons next seen-so-far))])))
 
+#|
+
+-- read one S-expression from in file
+-- send one S-expression via `sexp` to output port
+-- read one String or Float (JSON) from response port
+-- compare and report 
+
+|#
+
+
+(define ((one-ss-expression f))
+  (define one 
+    (with-handlers ([exn:fail:read?
+                     (λ (xn) (eprintf "~a contains something other than an S-expression\n" f))])
+      (read)))
+  (define next (read))
+  (if (eof-object? next)
+      (list one)
+      (eprintf "~a contains more than one S-expression\n" f)))
+  
 ;; -----------------------------------------------------------------------------
 ;; [Listof Path] -> [Listof [List String String]]
 ;; Find all pairs of the form x-i-in.json and x-i-out.json or
@@ -696,14 +739,14 @@
 
 (module+ test
   
-  (check-equal? (json-test-files '()) '())
+  (check-equal? (all-test-files '()) '())
   
   (define path0 (list (build-path "1-in.json") (build-path "1-out.json")))
   (define strg0 (list (map path->string path0)))
-  (check-equal? (json-test-files path0) strg0)
+  (check-equal? (all-test-files path0) strg0)
   
   (define path1 (list (build-path "1-in.json") (build-path "2-out.json")))
-  (check-equal? (json-test-files path1) '())
+  (check-equal? (all-test-files path1) '())
 
   (define path2 (list (build-path "/foo/bar/1-in.json")
                       (build-path "/foo/bar/1-out.json")
@@ -717,21 +760,25 @@
                       (build-path "/foo/bar/foo-bar-3-out.json")
                       (build-path "/foo/bar/2-out.json")
                       (build-path "/foo/bar/3-in.json")))
-  (check-equal? (json-test-files path2)
+  (check-equal? (all-test-files path2)
                 (list (list "/foo/bar/1-in.json" "/foo/bar/1-out.json")
                       (list "/foo/bar/foo-bar-1-in.json" "/foo/bar/foo-bar-1-out.json")
                       (list "/foo/bar/zot-1-in.json" "/foo/bar/zot-1-out.json")))
   
-  (check-equal? (json-test-files (append path0 path1)) strg0))
+  (check-equal? (all-test-files (append path0 path1)) strg0))
+
+(define JSON-FILES #px"^(.*/)?([^/]+-)?[0-9]+-[^/]*.json$")
+(define Sexp-FILES #px"^(.*/)?([^/]+-)?[0-9]+-[^/]*.ss$")
 
 #; {[Listof PathString] -> [Listof [List PathString PathString]]}
-(define (json-test-files d)
+(define (all-test-files d)
   #; [Listof PathString]
-  ;; such that their suffix is '.json'
-  (define all-json-files
-    (for/list ((f d)  #:when #px"^(.*/)?([^/]+-)?[0-9]+-[^/]*.json$")
-      (path->string f)))
-
+  ;; such that their suffix is '.json' or '.ss'
+  (define re (if [sexp?] Sexp-FILES JSON-FILES))
+  
+  (define all-re-files
+    (for/list ((f d)  #:when re) (path->string f)))
+  
   #; [listof [List PathString PathString]]
   (define the-files
     (filter-map
@@ -742,10 +789,10 @@
           (match-lambda
             [(list _entire _dir prefix numberstr)
              (define matched-name    (matching-output-file-name prefix numberstr))
-             (define output-filename (path-with-file-named all-json-files matched-name))
+             (define output-filename (path-with-file-named all-re-files matched-name))
              (and output-filename (list input-filename output-filename))])]
          [else #f]))
-     all-json-files))
+     all-re-files))
 
   (define -duplicates (remove-duplicates the-files))
 
