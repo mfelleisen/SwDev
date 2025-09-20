@@ -415,6 +415,7 @@
            (for/list ([t all-tests]
                       [r results])
              (match-define `(,in-fname ,input* ,out-fname ,expected-out) t)
+             (printf "(results for test ~a ~a)\n" in-fname (if (= r 1) "pass" "fail"))
              (and (= r 1)
                   (list in-fname out-fname)))))
   (displayln
