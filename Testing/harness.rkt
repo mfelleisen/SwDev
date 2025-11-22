@@ -46,6 +46,8 @@
    (->i (#:check [valid-json (-> any/c any)])
         (#:cmd   (command-line-args (listof string?))
          #:sexp-input (sexp-input boolean?) ;; sexp? from 2htdp/universe?
+         ;; always use JSON for expected output (internally, it won't metter)
+
          #:tcp   (tcp-on (or/c #false (and/c (>/c 1024) (</c 65000))))
          #:inexact-okay? [ok (or/c #false (and/c real? (</c 1.0) (>/c 0.0)))])
         (r (->i ([test-directory-path path-string?]
@@ -492,7 +494,10 @@
   
   (for/list ((x file*) (_i (in-naturals)) #:when (< _i (test-the-first-n-at-most)))
     (match-define `(,in-fname ,out-fname) x)
-    (match-define `(,input ,output) (list (file->ss-or-json in-fname) (file->ss-or-json out-fname)))
+    (match-define `(,input ,output)
+      (list (file->ss-or-json in-fname)
+            (parameterize ([sexp? #false])
+              (file->ss-or-json out-fname))))
     (list in-fname input out-fname output)))
 
 ;; ---------------------------------------------------------------------------------------------------
